@@ -1,3 +1,3 @@
 ### GLOBAL CONFIGS ###
-ADDON_NAME = "TA-scaleway_addon"
-ADDON_VERSION = "1.0.0"
+ADDON_NAME = "moviri_ti_manager_addon"
+ADDON_VERSION = "0.0.1"

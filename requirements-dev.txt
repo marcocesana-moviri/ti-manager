@@ -1,0 +1,3 @@
+-r ./moviri_ti_manager_addon/package/lib/requirements.txt
+
+splunk-add-on-ucc-framework
