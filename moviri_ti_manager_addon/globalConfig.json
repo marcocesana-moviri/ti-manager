@@ -3,61 +3,6 @@
         "configuration": {
             "tabs": [
                 {
-                    "name": "account",
-                    "table": {
-                        "actions": [
-                            "edit",
-                            "delete",
-                            "clone"
-                        ],
-                        "header": [
-                            {
-                                "label": "Name",
-                                "field": "name"
-                            }
-                        ]
-                    },
-                    "entity": [
-                        {
-                            "type": "text",
-                            "label": "Name",
-                            "validators": [
-                                {
-                                    "type": "regex",
-                                    "errorMsg": "Account Name must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
-                                    "pattern": "^[a-zA-Z]\\w*$"
-                                },
-                                {
-                                    "type": "string",
-                                    "errorMsg": "Length of input name should be between 1 and 100",
-                                    "minLength": 1,
-                                    "maxLength": 100
-                                }
-                            ],
-                            "field": "name",
-                            "help": "A unique name for the account.",
-                            "required": true
-                        },
-                        {
-                            "type": "text",
-                            "label": "API key",
-                            "field": "api_key",
-                            "help": "API key",
-                            "required": true,
-                            "encrypted": true,
-                            "validators": [
-                                {
-                                    "type": "string",
-                                    "errorMsg": "Length of API key should be between 1 and 50",
-                                    "minLength": 1,
-                                    "maxLength": 50
-                                }
-                            ]
-                        }
-                    ],
-                    "title": "Accounts"
-                },
-                {
                     "type": "loggingTab"
                 }
             ],
@@ -109,22 +54,18 @@
                             "label": "Index"
                         },
                         {
-                            "type": "singleSelect",
-                            "label": "Account to use",
-                            "options": {
-                                "referenceName": "account"
-                            },
-                            "help": "Account to use for this input.",
-                            "field": "account",
-                            "required": true,
+                            "type": "text",
+                            "label": "Threat Intelligence URL",
                             "validators": [
                                 {
-                                    "type": "string",
-                                    "errorMsg": "Length of account name should be between 1 and 100",
-                                    "minLength": 1,
-                                    "maxLength": 100
+                                    "type": "regex",
+                                    "errorMsg": "Threat Intelligence URL must begin with http:// or https://.",
+                                    "pattern": "^https?://.*$"
                                 }
-                            ]
+                            ],
+                            "field": "ti_url",
+                            "help": "The URL of the threat intelligence source.",
+                            "required": true
                         }
                     ],
                     "inputHelperModule": "get_ti_helper",
@@ -153,6 +94,10 @@
                         "field": "index"
                     },
                     {
+                        "label": "Threat Intelligence URL",
+                        "field": "ti_url"
+                    },
+                    {
                         "label": "Status",
                         "field": "disabled"
                     }
@@ -171,6 +116,10 @@
                         "field": "index"
                     },
                     {
+                        "label": "Threat Intelligence URL",
+                        "field": "ti_url"
+                    },
+                    {
                         "label": "Status",
                         "field": "disabled",
                         "mapping": {
@@ -180,13 +129,6 @@
                     }
                 ]
             }
-        },
-        "dashboard": {
-            "panels": [
-                {
-                    "name": "default"
-                }
-            ]
         }
     },
     "meta": {
@@ -194,7 +136,7 @@
         "restRoot": "moviri_ti_manager_addon",
         "version": "0.0.1",
         "displayName": "Moviri TI Manager Addon",
-        "schemaVersion": "0.0.8",
+        "schemaVersion": "0.0.10",
         "supportedThemes": [
             "light",
             "dark"
