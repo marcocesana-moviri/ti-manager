@@ -16,6 +16,17 @@
                     "entity": [
                         {
                             "type": "text",
+                            "label": "Sourcetype",
+                            "field": "sourcetype",
+                            "defaultValue": "ti_manager:diff",
+                            "options": {
+                                "display": false,
+                                "enable": false
+                            },
+                            "validators": []
+                        },
+                        {
+                            "type": "text",
                             "label": "Name",
                             "validators": [
                                 {

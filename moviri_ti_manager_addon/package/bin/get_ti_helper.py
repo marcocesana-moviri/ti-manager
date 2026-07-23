@@ -4,22 +4,11 @@ import logging
 import import_declare_test
 from solnlib import conf_manager, log
 from splunklib import modularinput as smi
+from configs import ADDON_NAME, LOG_DEBUG_TAG, LOG_INFO_TAG, LOG_ERROR_TAG, LOG_WARNING_TAG, LOG_CRITICAL_TAG
 
-
-ADDON_NAME = "moviri_ti_manager_addon"
 
 def logger_for_input(input_name: str) -> logging.Logger:
     return log.Logs().get_logger(f"{ADDON_NAME.lower()}_{input_name}")
-
-
-def get_account_api_key(session_key: str, account_name: str):
-    cfm = conf_manager.ConfManager(
-        session_key,
-        ADDON_NAME,
-        realm=f"__REST_CREDENTIAL__#{ADDON_NAME}#configs/conf-moviri_ti_manager_addon_account",
-    )
-    account_conf_file = cfm.get_conf("moviri_ti_manager_addon_account")
-    return account_conf_file.get(account_name).get("api_key")
 
 
 def get_data_from_api(logger: logging.Logger, api_key: str):
@@ -38,19 +27,35 @@ def get_data_from_api(logger: logging.Logger, api_key: str):
 def validate_input(definition: smi.ValidationDefinition):
     return
 
+def write_events(
+    index: str,
+    sourcetype: str,
+    events: list[dict],
+    input_name: str,
+    event_writer: smi.EventWriter,
+    logger: logging.Logger,
+) -> None:
+
+    for event in events:
+        try:
+            event_writer.write_event(
+                smi.Event(
+                    data=json.dumps(event, ensure_ascii=False, default=str),
+                    index=index,
+                    sourcetype=sourcetype,
+                )
+            )
+        except Exception as err:
+            logger.error(f"{LOG_ERROR_TAG} Failed to write event for input: {input_name}, error: {err}")
+    log.events_ingested(
+        logger,
+        input_name,
+        sourcetype,
+        len(events),
+        index,
+    )
 
 def stream_events(inputs: smi.InputDefinition, event_writer: smi.EventWriter):
-    # inputs.inputs is a Python dictionary object like:
-    # {
-    #   "get_ti://<input_name>": {
-    #     "account": "<account_name>",
-    #     "disabled": "0",
-    #     "host": "$decideOnStartup",
-    #     "index": "<index_name>",
-    #     "interval": "<interval_value>",
-    #     "python.version": "python3",
-    #   },
-    # }
     for input_name, input_item in inputs.inputs.items():
         normalized_input_name = input_name.split("/")[-1]
         logger = logger_for_input(normalized_input_name)
@@ -64,17 +69,21 @@ def stream_events(inputs: smi.InputDefinition, event_writer: smi.EventWriter):
             )
             logger.setLevel(log_level)
             log.modular_input_start(logger, normalized_input_name)
-            api_key = get_account_api_key(session_key, input_item.get("account"))
-            data = get_data_from_api(logger, api_key)
-            sourcetype = "dummy-data"
-            for line in data:
-                event_writer.write_event(
-                    smi.Event(
-                        data=json.dumps(line, ensure_ascii=False, default=str),
-                        index=input_item.get("index"),
-                        sourcetype=sourcetype,
-                    )
-                )
+
+            # Get input parameters
+            index = input_item.get("index")
+            sourcetype = input_item.get("sourcetype")
+            ti_url = input_item.get("ti_url")
+
+            logger.debug(
+                f"{LOG_DEBUG_TAG} Input parameters: ti_url={ti_url}, index={index}, sourcetype={sourcetype}"
+            )
+
+            # Get data from the external threat list
+            data = get_threat_list(logger, ti_url)
+
+            write_events(index, sourcetype, data, input_name, event_writer, logger)
+            
             log.events_ingested(
                 logger,
                 input_name,
@@ -85,4 +94,9 @@ def stream_events(inputs: smi.InputDefinition, event_writer: smi.EventWriter):
             )
             log.modular_input_end(logger, normalized_input_name)
         except Exception as e:
-            log.log_exception(logger, e, "my custom error type", msg_before="Exception raised while ingesting data for demo_input: ")
+            log.log_exception(
+                logger,
+                e,
+                LOG_ERROR_TAG,
+                msg_before=f"Exception raised while ingesting data for {normalized_input_name}: {e}",
+            )
