@@ -2,11 +2,13 @@ import json
 import logging
 import ipaddress
 import os
+import csv
 
 import requests
 from solnlib import conf_manager, log
 from splunklib import modularinput as smi
 from urllib.parse import urlparse
+from datetime import datetime, timezone
 from configs import (ADDON_NAME, LOG_DEBUG_TAG, LOG_INFO_TAG, LOG_ERROR_TAG, LOG_WARNING_TAG, LOG_CRITICAL_TAG, REQUEST_TIMEOUT, REQUEST_RETRIES)
 
 
@@ -49,37 +51,29 @@ def get_csv_name_from_url(logger: logging.Logger, ti_url: str):
     return csv_name
 
 
+def _generate_logs(ti_data: list[str], ti_url: str):
+    logs = [
+        f'{datetime.now(timezone.utc).isoformat()} action="added", ip_address="{ip}", threat_list="{ti_url}"' 
+        for ip in ti_data
+    ]
+    return logs
+
 def validate_input(definition: smi.ValidationDefinition):
     return
 
 
-def write_events(
-    index: str,
-    sourcetype: str,
-    events: list[dict],
-    input_name: str,
-    event_writer: smi.EventWriter,
-    logger: logging.Logger,
-) -> None:
-
-    for event in events:
+def write_events(index: str, sourcetype: str, logs: list[str], input_name: str, event_writer: smi.EventWriter, logger: logging.Logger) -> None:
+    for event in logs:
         try:
             event_writer.write_event(
                 smi.Event(
-                    data=json.dumps(event, ensure_ascii=False, default=str),
+                    data=event,
                     index=index,
                     sourcetype=sourcetype,
                 )
             )
         except Exception as err:
             logger.error(f"{LOG_ERROR_TAG} Failed to write event for input: {input_name}, error: {err}")
-    log.events_ingested(
-        logger,
-        input_name,
-        sourcetype,
-        len(events),
-        index,
-    )
 
 
 def stream_events(inputs: smi.InputDefinition, event_writer: smi.EventWriter):
@@ -108,20 +102,27 @@ def stream_events(inputs: smi.InputDefinition, event_writer: smi.EventWriter):
 
             # Get data from the external threat list
             ti_data = get_threat_list(logger, ti_url)
-            csv_name = get_csv_name_from_url(logger, ti_url)
+            if ti_data:
+                csv_name = get_csv_name_from_url(logger, ti_url)
+                if not os.path.exists("../lookups/" + csv_name):
+                    logger.info(f"{LOG_DEBUG_TAG} CSV {csv_name} does not exist. Creating the file.")
+                    with open("../lookups/" + csv_name, mode='w', newline='', encoding='utf-8') as csv_file:
+                        writer = csv.writer(csv_file)
+                        writer.writerow(['ip_address'])
+                        for ip in ti_data:
+                            writer.writerow([ip])
+                    logger.info(f"{LOG_DEBUG_TAG} CSV {csv_name} file created. {len(ti_data)} IP addresses written to the file.")
+                    logs = _generate_logs(ti_data, ti_url)
+                    write_events(index, sourcetype, logs, input_name, event_writer, logger)
+                    log.events_ingested(logger, input_name, sourcetype, len(logs), index)
+                    log.modular_input_end(logger, normalized_input_name)
+                else:
+                    logger.info(f"{LOG_DEBUG_TAG} CSV {csv_name} already exists. Skipping file creation.")
+                    log.modular_input_end(logger, normalized_input_name)
+            else:
+                logger.warning(f"{LOG_WARNING_TAG} No data fetched from URL: {ti_url}. Skipping event writing.")
+                log.modular_input_end(logger, normalized_input_name)
             
-
-            write_events(index, sourcetype, data, input_name, event_writer, logger)
-            
-            log.events_ingested(
-                logger,
-                input_name,
-                sourcetype,
-                len(data),
-                input_item.get("index"),
-                account=input_item.get("account"),
-            )
-            log.modular_input_end(logger, normalized_input_name)
         except Exception as e:
             log.log_exception(
                 logger,
