@@ -16,6 +16,84 @@
                     "entity": [
                         {
                             "type": "text",
+                            "label": "Threat Intelligence Name",
+                            "validators": [
+                                {
+                                    "type": "regex",
+                                    "errorMsg": "Threat Intelligence Name must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
+                                    "pattern": "^[a-zA-Z]\\w*$"
+                                },
+                                {
+                                    "type": "string",
+                                    "errorMsg": "Length of Threat Intelligence Name should be between 1 and 100",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                }
+                            ],
+                            "field": "name",
+                            "help": "A unique name for the threat intelligence.",
+                            "required": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "Description",
+                            "validators": [
+                                {
+                                    "type": "string",
+                                    "errorMsg": "Length of Threat Intelligence Description should be between 1 and 1000",
+                                    "minLength": 1,
+                                    "maxLength": 1000
+                                }
+                            ],
+                            "field": "description",
+                            "help": "A description for the threat intelligence.",
+                            "required": true
+                        },
+                        {
+                            "type": "interval",
+                            "label": "Interval",
+                            "defaultValue": "300",
+                            "field": "interval",
+                            "options": {
+                                "range": [
+                                    60,
+                                    2592001
+                                ]
+                            },
+                            "help": "Time interval of the data input, in seconds.",
+                            "required": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "Threat Intelligence URL",
+                            "validators": [
+                                {
+                                    "type": "regex",
+                                    "errorMsg": "Threat Intelligence URL must begin with http:// or https://.",
+                                    "pattern": "^https?://.*$"
+                                }
+                            ],
+                            "field": "ti_url",
+                            "help": "The URL of the threat intelligence source.",
+                            "required": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "IP matching regex",
+                            "validators": [],
+                            "field": "ti_matching_regex",
+                            "help": "The regex pattern for matching IP addresses.",
+                            "required": true
+                        }
+                    ],
+                    "inputHelperModule": "get_ti_helper",
+                    "title": "get_ti"
+                },
+                {
+                    "name": "merge_ti",
+                    "entity": [
+                        {
+                            "type": "text",
                             "label": "Sourcetype",
                             "field": "sourcetype",
                             "defaultValue": "ti_manager:diff",
@@ -63,24 +141,10 @@
                             "type": "index",
                             "field": "index",
                             "label": "Index"
-                        },
-                        {
-                            "type": "text",
-                            "label": "Threat Intelligence URL",
-                            "validators": [
-                                {
-                                    "type": "regex",
-                                    "errorMsg": "Threat Intelligence URL must begin with http:// or https://.",
-                                    "pattern": "^https?://.*$"
-                                }
-                            ],
-                            "field": "ti_url",
-                            "help": "The URL of the threat intelligence source.",
-                            "required": true
                         }
                     ],
-                    "inputHelperModule": "get_ti_helper",
-                    "title": "get_ti"
+                    "inputHelperModule": "merge_ti_helper",
+                    "title": "merge_ti"
                 }
             ],
             "title": "Inputs",
