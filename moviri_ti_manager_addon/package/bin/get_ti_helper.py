@@ -6,6 +6,7 @@ import tempfile
 import time
 import re
 from urllib.parse import urlparse
+from typing import Union
 
 import requests
 from solnlib import conf_manager, log
@@ -27,7 +28,7 @@ def logger_for_input(input_name: str) -> logging.Logger:
     return log.Logs().get_logger(f"{ADDON_NAME.lower()}_{input_name}")
 
 
-def get_threat_list(logger: logging.Logger, ti_url: str, ip_regex: re.Pattern) -> list[str]:
+def get_threat_list(logger: logging.Logger, ti_url: str, ip_regex: Union[str, re.Pattern]) -> list[str]:
     """Scarica il feed da `ti_url` con retry e backoff.
 
     Estrae l'IP ed il CIDR (se presente) usando `ip_regex`.
@@ -35,6 +36,8 @@ def get_threat_list(logger: logging.Logger, ti_url: str, ip_regex: re.Pattern) -
     le righe non valide o che non matchano la regex vengono scartate
     e contate. Il risultato è de-duplicato e ordinato.
     """
+    if isinstance(ip_regex, str):
+        ip_regex = re.compile(ip_regex)
     logger.debug(f"{LOG_DEBUG_TAG} Fetching threat intelligence data from: {ti_url}")
     for attempt in range(1, REQUEST_RETRIES + 1):
         try:
@@ -51,12 +54,20 @@ def get_threat_list(logger: logging.Logger, ti_url: str, ip_regex: re.Pattern) -
                 if not match:
                     invalid_count += 1
                     continue
-                # Estrazione dei due capturing group
-                ip = match.group(1)
-                # Usa il secondo gruppo se presente, altrimenti fallback a "32"
-                cidr = match.group(2) if match.group(2) else "32"
+                groups = match.groups()   
+                if len(groups) >= 1:
+                    ip = match.group(1)
+                    cidr = match.group(2) if len(groups) >= 2 and match.group(2) else "32"
+                else:
+                    # Fallback: la regex ha fatto match ma non ha capturing group.
+                    # Prendiamo l'intero match (group 0) e cerchiamo di separare IP e CIDR a mano.
+                    full_match = match.group(0)
+                    if "/" in full_match:
+                        ip, cidr = full_match.split("/", 1)
+                    else:
+                        ip = full_match
+                        cidr = "32"
                 ip_cidr_str = f"{ip}/{cidr}"
-                # Validazione tramite la libreria built-in ipaddress
                 try:
                     network = ipaddress.ip_network(ip_cidr_str, strict=False)
                     valid_ips.append(str(network))
