@@ -1,207 +1,220 @@
 {
-  "pages": {
-    "configuration": {
-      "tabs": [
-        {
-          "type": "loggingTab"
-        }
-      ],
-      "title": "Configuration",
-      "description": "Set up your add-on"
-    },
-    "inputs": {
-      "services": [
-        {
-          "name": "get_ti",
-          "entity": [
-            {
-              "type": "text",
-              "label": "Threat Intelligence Name",
-              "validators": [
+    "pages": {
+        "configuration": {
+            "tabs": [
                 {
-                  "type": "regex",
-                  "errorMsg": "Threat Intelligence Name must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
-                  "pattern": "^[a-zA-Z]\\w*$"
-                },
-                {
-                  "type": "string",
-                  "errorMsg": "Length of Threat Intelligence Name should be between 1 and 100",
-                  "minLength": 1,
-                  "maxLength": 100
+                    "type": "loggingTab"
                 }
-              ],
-              "field": "name",
-              "help": "A unique name for the threat intelligence.",
-              "required": true
-            },
-            {
-              "type": "text",
-              "label": "Description",
-              "validators": [
-                {
-                  "type": "string",
-                  "errorMsg": "Length of Threat Intelligence Description should be between 1 and 1000",
-                  "minLength": 1,
-                  "maxLength": 1000
-                }
-              ],
-              "field": "description",
-              "help": "A description for the threat intelligence.",
-              "required": true
-            },
-            {
-              "type": "interval",
-              "label": "Interval",
-              "defaultValue": "300",
-              "field": "interval",
-              "options": {
-                "range": [60, 2592001]
-              },
-              "help": "Time interval of the data input, in seconds.",
-              "required": true
-            },
-            {
-              "type": "text",
-              "label": "Threat Intelligence URL",
-              "validators": [
-                {
-                  "type": "regex",
-                  "errorMsg": "Threat Intelligence URL must begin with http:// or https://.",
-                  "pattern": "^https?://.*$"
-                }
-              ],
-              "field": "ti_url",
-              "help": "The URL of the threat intelligence source.",
-              "required": true
-            },
-            {
-              "type": "text",
-              "label": "IP matching regex",
-              "validators": [],
-              "field": "ti_matching_regex",
-              "help": "The regex pattern for matching IP addresses.",
-              "required": true
-            }
-          ],
-          "inputHelperModule": "get_ti_helper",
-          "title": "Get Threat Intelligence"
+            ],
+            "title": "Configuration",
+            "description": "Set up your add-on"
         },
-        {
-          "name": "merge_ti",
-          "entity": [
-            {
-              "type": "text",
-              "label": "Sourcetype",
-              "field": "sourcetype",
-              "defaultValue": "ti_manager:diff",
-              "options": {
-                "display": false,
-                "enable": false
-              },
-              "validators": []
-            },
-            {
-              "type": "text",
-              "label": "Name",
-              "validators": [
+        "inputs": {
+            "services": [
                 {
-                  "type": "regex",
-                  "errorMsg": "Input Name must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
-                  "pattern": "^[a-zA-Z]\\w*$"
+                    "name": "get_ti",
+                    "entity": [
+                        {
+                            "type": "text",
+                            "label": "Threat Intelligence Name",
+                            "validators": [
+                                {
+                                    "type": "regex",
+                                    "errorMsg": "Threat Intelligence Name must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
+                                    "pattern": "^[a-zA-Z]\\w*$"
+                                },
+                                {
+                                    "type": "string",
+                                    "errorMsg": "Length of Threat Intelligence Name should be between 1 and 100",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                }
+                            ],
+                            "field": "name",
+                            "help": "A unique name for the threat intelligence.",
+                            "required": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "Description",
+                            "validators": [
+                                {
+                                    "type": "string",
+                                    "errorMsg": "Length of Threat Intelligence Description should be between 1 and 1000",
+                                    "minLength": 1,
+                                    "maxLength": 1000
+                                }
+                            ],
+                            "field": "description",
+                            "help": "A description for the threat intelligence.",
+                            "required": true
+                        },
+                        {
+                            "type": "interval",
+                            "label": "Interval",
+                            "defaultValue": "300",
+                            "field": "interval",
+                            "options": {
+                                "range": [
+                                    60,
+                                    2592001
+                                ]
+                            },
+                            "help": "Time interval of the data input, in seconds.",
+                            "required": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "Threat Intelligence URL",
+                            "validators": [
+                                {
+                                    "type": "regex",
+                                    "errorMsg": "Threat Intelligence URL must begin with http:// or https://.",
+                                    "pattern": "^https?://.*$"
+                                }
+                            ],
+                            "field": "ti_url",
+                            "help": "The URL of the threat intelligence source.",
+                            "required": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "IP matching regex",
+                            "validators": [],
+                            "field": "ti_matching_regex",
+                            "help": "The regex pattern for matching IP addresses.",
+                            "required": true
+                        }
+                    ],
+                    "inputHelperModule": "get_ti_helper",
+                    "title": "Get Threat Intelligence"
                 },
                 {
-                  "type": "string",
-                  "errorMsg": "Length of input name should be between 1 and 100",
-                  "minLength": 1,
-                  "maxLength": 100
+                    "name": "merge_ti",
+                    "entity": [
+                        {
+                            "type": "text",
+                            "label": "Sourcetype",
+                            "field": "sourcetype",
+                            "defaultValue": "ti_manager:diff",
+                            "options": {
+                                "display": false,
+                                "enable": false
+                            },
+                            "validators": []
+                        },
+                        {
+                            "type": "text",
+                            "label": "Name",
+                            "validators": [
+                                {
+                                    "type": "regex",
+                                    "errorMsg": "Input Name must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
+                                    "pattern": "^[a-zA-Z]\\w*$"
+                                },
+                                {
+                                    "type": "string",
+                                    "errorMsg": "Length of input name should be between 1 and 100",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                }
+                            ],
+                            "field": "name",
+                            "help": "A unique name for the data input.",
+                            "required": true
+                        },
+                        {
+                            "type": "interval",
+                            "label": "Interval",
+                            "defaultValue": "300",
+                            "field": "interval",
+                            "options": {
+                                "range": [
+                                    60,
+                                    2592001
+                                ]
+                            },
+                            "help": "Time interval of the data input, in seconds.",
+                            "required": true
+                        },
+                        {
+                            "type": "index",
+                            "field": "index",
+                            "label": "Index"
+                        }
+                    ],
+                    "inputHelperModule": "merge_ti_helper",
+                    "title": "Merge Threat Intelligence"
                 }
-              ],
-              "field": "name",
-              "help": "A unique name for the data input.",
-              "required": true
-            },
-            {
-              "type": "interval",
-              "label": "Interval",
-              "defaultValue": "300",
-              "field": "interval",
-              "options": {
-                "range": [60, 2592001]
-              },
-              "help": "Time interval of the data input, in seconds.",
-              "required": true
-            },
-            {
-              "type": "index",
-              "field": "index",
-              "label": "Index"
+            ],
+            "title": "Inputs",
+            "description": "Manage your data inputs",
+            "table": {
+                "actions": [
+                    "edit",
+                    "delete",
+                    "clone"
+                ],
+                "header": [
+                    {
+                        "label": "Name",
+                        "field": "name"
+                    },
+                    {
+                        "label": "Interval",
+                        "field": "interval"
+                    },
+                    {
+                        "label": "Index",
+                        "field": "index"
+                    },
+                    {
+                        "label": "Threat Intelligence URL",
+                        "field": "ti_url"
+                    },
+                    {
+                        "label": "Status",
+                        "field": "disabled"
+                    }
+                ],
+                "moreInfo": [
+                    {
+                        "label": "Name",
+                        "field": "name"
+                    },
+                    {
+                        "label": "Interval",
+                        "field": "interval"
+                    },
+                    {
+                        "label": "Index",
+                        "field": "index"
+                    },
+                    {
+                        "label": "Threat Intelligence URL",
+                        "field": "ti_url"
+                    },
+                    {
+                        "label": "Status",
+                        "field": "disabled",
+                        "mapping": {
+                            "true": "Inactive",
+                            "false": "Active"
+                        }
+                    }
+                ]
             }
-          ],
-          "inputHelperModule": "merge_ti_helper",
-          "title": "Merge Threat Intelligence"
         }
-      ],
-      "title": "Inputs",
-      "description": "Manage your data inputs",
-      "table": {
-        "actions": ["edit", "delete", "clone"],
-        "header": [
-          {
-            "label": "Name",
-            "field": "name"
-          },
-          {
-            "label": "Interval",
-            "field": "interval"
-          },
-          {
-            "label": "Index",
-            "field": "index"
-          },
-          {
-            "label": "Threat Intelligence URL",
-            "field": "ti_url"
-          },
-          {
-            "label": "Status",
-            "field": "disabled"
-          }
-        ],
-        "moreInfo": [
-          {
-            "label": "Name",
-            "field": "name"
-          },
-          {
-            "label": "Interval",
-            "field": "interval"
-          },
-          {
-            "label": "Index",
-            "field": "index"
-          },
-          {
-            "label": "Threat Intelligence URL",
-            "field": "ti_url"
-          },
-          {
-            "label": "Status",
-            "field": "disabled",
-            "mapping": {
-              "true": "Inactive",
-              "false": "Active"
-            }
-          }
+    },
+    "meta": {
+        "name": "moviri_ti_manager_addon",
+        "restRoot": "moviri_ti_manager_addon",
+        "version": "0.0.1",
+        "displayName": "Moviri TI Manager Addon",
+        "schemaVersion": "0.0.10",
+        "supportedThemes": [
+            "light",
+            "dark"
         ]
-      }
     }
-  },
-  "meta": {
-    "name": "moviri_ti_manager_addon",
-    "restRoot": "moviri_ti_manager_addon",
-    "version": "0.0.1",
-    "displayName": "Moviri TI Manager Addon",
-    "schemaVersion": "0.0.10",
-    "supportedThemes": ["light", "dark"]
-  }
 }
