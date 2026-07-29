@@ -3,6 +3,74 @@
         "configuration": {
             "tabs": [
                 {
+                    "name": "account",
+                    "title": "Accounts",
+                    "table": {
+                        "actions": [
+                            "edit",
+                            "delete",
+                            "clone"
+                        ],
+                        "header": [
+                            {
+                                "label": "Splunk Username",
+                                "field": "splunk_username"
+                            }
+                        ]
+                    },
+                    "entity": [
+                        {
+                            "type": "text",
+                            "label": "Account name",
+                            "field": "name",
+                            "help": "A unique name for the account",
+                            "required": true,
+                            "validators": [
+                                {
+                                    "type": "regex",
+                                    "errorMsg": "Account name must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
+                                    "pattern": "^[a-zA-Z]\\w*$"
+                                },
+                                {
+                                    "type": "string",
+                                    "errorMsg": "Length of input name must be between 1 and 100 characters.",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                }
+                            ]
+                        },
+                        {
+                            "type": "text",
+                            "label": "Splunk Username",
+                            "field": "splunk_username",
+                            "help": "The Splunk username.",
+                            "required": true,
+                            "validators": [
+                                {
+                                    "type": "regex",
+                                    "errorMsg": "Splunk username must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
+                                    "pattern": "^[a-zA-Z]\\w*$"
+                                },
+                                {
+                                    "type": "string",
+                                    "errorMsg": "Length of input name must be between 1 and 100 characters.",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                }
+                            ]
+                        },
+                        {
+                            "type": "text",
+                            "label": "Splunk Password",
+                            "field": "splunk_password",
+                            "help": "The Splunk password associated with the Splunk username",
+                            "required": true,
+                            "encrypted": true,
+                            "validators": []
+                        }
+                    ]
+                },
+                {
                     "type": "loggingTab"
                 }
             ],
@@ -136,6 +204,16 @@
                             },
                             "help": "Time interval of the data input, in seconds.",
                             "required": true
+                        },
+                        {
+                            "type": "singleSelect",
+                            "label": "Account to use",
+                            "help": "Account to use for this input",
+                            "field": "account",
+                            "required": true,
+                            "options": {
+                                "referenceName": "account"
+                            }
                         },
                         {
                             "type": "index",

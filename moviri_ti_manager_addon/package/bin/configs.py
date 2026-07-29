@@ -2,6 +2,8 @@
 ADDON_NAME = "moviri_ti_manager_addon"
 ADDON_VERSION = "0.0.1"
 CONF_FILE_NAME = "moviri_ti_manager_addon_settings"
+CONF_FILE_BASE_NAME = f"{ADDON_NAME.lower()}"
+ACCOUNT_CONF_FILE_NAME = f"{CONF_FILE_BASE_NAME}_account"
 
 ### LOGGER CONFIGS ###
 LOG_DEBUG_TAG = "[TI MANAGER DEBUG]"
