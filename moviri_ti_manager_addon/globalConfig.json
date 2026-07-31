@@ -28,12 +28,12 @@
                             "validators": [
                                 {
                                     "type": "regex",
-                                    "errorMsg": "Account name must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
+                                    "errorMsg": "Account name must begin with a letter and consist exclusively of alphanumeric characters and underscores",
                                     "pattern": "^[a-zA-Z]\\w*$"
                                 },
                                 {
                                     "type": "string",
-                                    "errorMsg": "Length of input name must be between 1 and 100 characters.",
+                                    "errorMsg": "Length of input name must be between 1 and 100 characters",
                                     "minLength": 1,
                                     "maxLength": 100
                                 }
@@ -43,17 +43,17 @@
                             "type": "text",
                             "label": "Splunk Username",
                             "field": "splunk_username",
-                            "help": "The Splunk username.",
+                            "help": "The Splunk username",
                             "required": true,
                             "validators": [
                                 {
                                     "type": "regex",
-                                    "errorMsg": "Splunk username must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
+                                    "errorMsg": "Splunk username must begin with a letter and consist exclusively of alphanumeric characters and underscores",
                                     "pattern": "^[a-zA-Z]\\w*$"
                                 },
                                 {
                                     "type": "string",
-                                    "errorMsg": "Length of input name must be between 1 and 100 characters.",
+                                    "errorMsg": "Length of input name must be between 1 and 100 characters",
                                     "minLength": 1,
                                     "maxLength": 100
                                 }
@@ -88,7 +88,7 @@
                             "validators": [
                                 {
                                     "type": "regex",
-                                    "errorMsg": "Threat Intelligence Name must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
+                                    "errorMsg": "Threat Intelligence Name must begin with a letter and consist exclusively of alphanumeric characters and underscores",
                                     "pattern": "^[a-zA-Z]\\w*$"
                                 },
                                 {
@@ -99,7 +99,7 @@
                                 }
                             ],
                             "field": "name",
-                            "help": "A unique name for the threat intelligence.",
+                            "help": "A unique name for the threat intelligence",
                             "required": true
                         },
                         {
@@ -114,7 +114,7 @@
                                 }
                             ],
                             "field": "description",
-                            "help": "A description for the threat intelligence.",
+                            "help": "A description for the threat intelligence",
                             "required": true
                         },
                         {
@@ -128,7 +128,7 @@
                                     2592001
                                 ]
                             },
-                            "help": "Time interval of the data input, in seconds.",
+                            "help": "Time interval of the data input, in seconds",
                             "required": true
                         },
                         {
@@ -137,12 +137,12 @@
                             "validators": [
                                 {
                                     "type": "regex",
-                                    "errorMsg": "Threat Intelligence URL must begin with http:// or https://.",
+                                    "errorMsg": "Threat Intelligence URL must begin with http:// or https://",
                                     "pattern": "^https?://.*$"
                                 }
                             ],
                             "field": "ti_url",
-                            "help": "The URL of the threat intelligence source.",
+                            "help": "The URL of the threat intelligence source",
                             "required": true
                         },
                         {
@@ -170,7 +170,7 @@
                             "label": "IP matching regex",
                             "validators": [],
                             "field": "ti_matching_regex",
-                            "help": "The regex pattern for matching IP addresses.",
+                            "help": "The regex pattern for matching IP addresses",
                             "required": true
                         }
                     ],
@@ -199,7 +199,7 @@
                             "validators": [
                                 {
                                     "type": "regex",
-                                    "errorMsg": "Input Name must begin with a letter and consist exclusively of alphanumeric characters and underscores.",
+                                    "errorMsg": "Input Name must begin with a letter and consist exclusively of alphanumeric characters and underscores",
                                     "pattern": "^[a-zA-Z]\\w*$"
                                 },
                                 {
@@ -210,7 +210,7 @@
                                 }
                             ],
                             "field": "name",
-                            "help": "A unique name for the data input.",
+                            "help": "A unique name for the data input",
                             "required": true
                         },
                         {
@@ -224,7 +224,7 @@
                                     2592001
                                 ]
                             },
-                            "help": "Time interval of the data input, in seconds.",
+                            "help": "Time interval of the data input, in seconds",
                             "required": true
                         },
                         {
@@ -248,12 +248,12 @@
                             "validators": [
                                 {
                                     "type": "regex",
-                                    "errorMsg": "Please enter a valid IP address or hostname (do not include http:// or https://).",
+                                    "errorMsg": "Please enter a valid IP address or hostname (do not include http:// or https://)",
                                     "pattern": "^([a-zA-Z0-9.-]+)$"
                                 }
                             ],
                             "field": "search_head",
-                            "help": "The IP address or hostname of the Search Head.",
+                            "help": "The IP address or hostname of the Search Head",
                             "required": true
                         },
                         {
@@ -265,7 +265,7 @@
                             "validators": [
                                 {
                                     "type": "number",
-                                    "errorMsg": "Management Port must be a number between 1 and 65535.",
+                                    "errorMsg": "Management Port must be a number between 1 and 65535",
                                     "range": [
                                         1,
                                         65535
@@ -280,12 +280,12 @@
                             "validators": [
                                 {
                                     "type": "regex",
-                                    "errorMsg": "Please enter a valid app name.",
+                                    "errorMsg": "Please enter a valid app name",
                                     "pattern": "^[a-zA-Z]\\w*$"
                                 }
                             ],
                             "field": "app_name",
-                            "help": "The name of the app where all the KV Store collections reside.",
+                            "help": "The name of the app where all the KV Store collections reside",
                             "required": true
                         },
                         {
@@ -294,12 +294,26 @@
                             "validators": [
                                 {
                                     "type": "regex",
-                                    "errorMsg": "Please enter a valid collection name.",
+                                    "errorMsg": "Please enter a valid collection name",
                                     "pattern": "^[a-zA-Z]\\w*$"
                                 }
                             ],
                             "field": "master_threatlist_collection",
-                            "help": "The name of the Master Threatlist collection.",
+                            "help": "The name of the Master Threatlist collection",
+                            "required": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "Master Whitelist",
+                            "validators": [
+                                {
+                                    "type": "regex",
+                                    "errorMsg": "Please enter a valid collection name",
+                                    "pattern": "^[a-zA-Z]\\w*$"
+                                }
+                            ],
+                            "field": "master_whitelist_collection",
+                            "help": "The name of the Master Whitelist collection",
                             "required": true
                         },
                         {
@@ -308,12 +322,12 @@
                             "validators": [
                                 {
                                     "type": "regex",
-                                    "errorMsg": "Please enter a valid collection name.",
+                                    "errorMsg": "Please enter a valid collection name",
                                     "pattern": "^[a-zA-Z]\\w*$"
                                 }
                             ],
                             "field": "manual_blacklist_collection",
-                            "help": "The name of the Manual Blacklist collection.",
+                            "help": "The name of the Manual Blacklist collection",
                             "required": true
                         },
                         {
@@ -322,12 +336,12 @@
                             "validators": [
                                 {
                                     "type": "regex",
-                                    "errorMsg": "Please enter a valid collection name.",
+                                    "errorMsg": "Please enter a valid collection name",
                                     "pattern": "^[a-zA-Z]\\w*$"
                                 }
                             ],
                             "field": "manual_whitelist_collection",
-                            "help": "The name of the Manual Whitelist collection.",
+                            "help": "The name of the Manual Whitelist collection",
                             "required": true
                         }
                     ],

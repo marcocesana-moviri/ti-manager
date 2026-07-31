@@ -210,7 +210,7 @@ def extract_and_filter_networks(
     bl_files = glob.glob(os.path.join(lookups_dirs["blacklists"], "*.csv"))
     raw_bl_v4, raw_bl_v6 = _read_networks_from_files(logger, bl_files)
     
-    # 3. Filtraggio delle blacklist (rimane invariato)
+    # 3. Filtraggio delle blacklist
     filtered_v4 = []
     for net in raw_bl_v4:
         if not _is_overlapping(int(net.network_address), int(net.broadcast_address), wl_v4_ranges):
@@ -224,18 +224,18 @@ def extract_and_filter_networks(
     return filtered_v4, filtered_v6, wl_v4, wl_v6
 
 
-def optimize_ips(logger: logging.Logger, ipv4_nets: List, ipv6_nets: List) -> Set[str]:
+def optimize_ips(logger: logging.Logger, ipv4_nets: List, ipv6_nets: List, action: str) -> Set[str]:
     """
     Uses collapse_addresses to eliminate duplicate or overlapping IPs/subnets.
     Returns an optimized set of strings.
     """
-    logger.debug(f"{LOG_DEBUG_TAG} Collapsing {len(ipv4_nets)} IPv4 and {len(ipv6_nets)} IPv6 raw entries...")
+    logger.debug(f"{LOG_DEBUG_TAG} Collapsing {len(ipv4_nets)} IPv4 and {len(ipv6_nets)} IPv6 {action} raw entries...")
     
     collapsed_v4 = list(ipaddress.collapse_addresses(ipv4_nets))
     collapsed_v6 = list(ipaddress.collapse_addresses(ipv6_nets))
     
     optimized_set = {str(net) for net in (collapsed_v4 + collapsed_v6)}
-    logger.debug(f"{LOG_DEBUG_TAG} Collapsed to {len(optimized_set)} unique optimized subnets/IPs.")
+    logger.debug(f"{LOG_DEBUG_TAG} Collapsed to {len(optimized_set)} unique optimized {action} subnets/IPs.")
     
     return set(optimized_set)
 
@@ -391,63 +391,80 @@ def get_manual_list_from_search_head(
         logger.error(f"{LOG_ERROR_TAG} Irreversible error retrieving list '{collection_name}' from KV Store: {e}")
 
 
-def push_csv_lookup_to_search_head(
+def push_master_whitelist_to_kvstore(
     logger: logging.Logger,
     splunk_username: str,
     splunk_password: str,
+    whitelist_ips: Set[str],
     search_head: str,
     search_head_port: int,
     app_name: str,
-    csv_filepath: str,
-    lookup_filename: str
+    collection_name: str,
 ) -> None:
     """
-    Uploads a CSV file directly as a Lookup Table File to the Search Head via REST API.
-    Implements retry and backoff in case of network or API errors.
+    Overwrites the remote Splunk KV Store collection with the new whitelist.
+    It unconditionally deletes all existing records and performs a batched POST.
     """
-    url = f"https://{search_head}:{search_head_port}/servicesNS/nobody/{app_name}/data/lookup-table-files/{lookup_filename}"
+    base_url = f"https://{search_head}:{search_head_port}/servicesNS/nobody/{app_name}/storage/collections/data/{collection_name}"
     auth_tuple = (splunk_username, splunk_password)
-
-    logger.debug(f"{LOG_DEBUG_TAG} Starting upload of CSV lookup '{lookup_filename}' to {url}")
-
-    if not os.path.exists(csv_filepath):
-        logger.error(f"{LOG_ERROR_TAG} CSV file not found at path: {csv_filepath}")
-        return
-
+    
+    # 1. DELETE ALL RECORDS
+    logger.debug(f"{LOG_DEBUG_TAG} Clearing all existing records from KV Store {collection_name}")
     for attempt in range(1, REQUEST_RETRIES + 1):
         try:
-            # File is opened inside the loop to ensure the pointer is at the beginning 
-            # (byte 0) on every new retry attempt.
-            with open(csv_filepath, "rb") as f:
-                # Splunk expects the multipart form-data in the 'eai:data' parameter
-                files = {"eai:data": (lookup_filename, f, "text/csv")}
-                
-                response = requests.post(
-                    url,
-                    auth=auth_tuple,
-                    files=files,
-                    verify=False,
-                    timeout=REQUEST_TIMEOUT,
-                    data={"output_mode": "json"}
-                )
+            response = requests.delete(
+                base_url,
+                auth=auth_tuple,
+                verify=False,
+                timeout=REQUEST_TIMEOUT
+            )
+            if response.status_code not in (200, 404):
                 response.raise_for_status()
-                
-            logger.info(f"{LOG_INFO_TAG} CSV lookup '{lookup_filename}' successfully uploaded to the Search Head.")
-            break  # Success, exit the retry loop
-            
+            break
         except requests.exceptions.RequestException as e:
-            logger.error(f"{LOG_ERROR_TAG} Attempt {attempt}/{REQUEST_RETRIES} failed to upload CSV '{lookup_filename}': {e}")
-            
-            # Print Splunk's exact error message if available
-            if hasattr(e, 'response') and e.response is not None:
-                logger.error(f"{LOG_ERROR_TAG} Splunk response detail: {e.response.text}")
-                
+            logger.error(f"{LOG_ERROR_TAG} Attempt {attempt}/{REQUEST_RETRIES} failed deleting all records from KV Store {collection_name}: {e}")
             if attempt < REQUEST_RETRIES:
-                delay = RETRY_BACKOFF_SECONDS * attempt
-                logger.debug(f"{LOG_DEBUG_TAG} Retrying in {delay}s (attempt {attempt + 1}/{REQUEST_RETRIES})")
-                time.sleep(delay)
+                time.sleep(RETRY_BACKOFF_SECONDS * attempt)
             else:
-                logger.error(f"{LOG_ERROR_TAG} Giving up on uploading CSV '{lookup_filename}' after {REQUEST_RETRIES} attempts.")
+                logger.error(f"{LOG_ERROR_TAG} Giving up on clearing KV Store {collection_name}. Whitelist push aborted.")
+                raise # Solleviamo un'eccezione per bloccare il push ed evitare duplicati
+
+    # 2. INSERT NEW RECORDS (POST via batch_save)
+    if whitelist_ips:
+        logger.debug(f"{LOG_DEBUG_TAG} Pushing {len(whitelist_ips)} IPs to KV Store {collection_name}")
+        batch_url = f"{base_url}/batch_save"
+        headers = {"Content-Type": "application/json"}
+        
+        # Mapping _key via MD5 and ip for batch saving.
+        payload = [{"_key": hashlib.md5(ip.encode('utf-8')).hexdigest(), "ip": ip} for ip in whitelist_ips]
+        
+        # Chunking payload to safely adhere to Splunk REST batch limits[cite: 4]
+        for i in range(0, len(payload), KVSTORE_ADDITION_CHUNK_SIZE):
+            chunk = payload[i:i + KVSTORE_ADDITION_CHUNK_SIZE]
+            
+            for attempt in range(1, REQUEST_RETRIES + 1):
+                try:
+                    response = requests.post(
+                        batch_url,
+                        auth=auth_tuple,
+                        headers=headers,
+                        json=chunk,
+                        verify=False,
+                        timeout=REQUEST_TIMEOUT
+                    )
+                    response.raise_for_status()
+                    break
+                except requests.exceptions.RequestException as e:
+                    logger.error(f"{LOG_ERROR_TAG} Attempt {attempt}/{REQUEST_RETRIES} failed during batch push ({len(chunk)} items) to KV Store {collection_name}: {e}")
+                    if hasattr(e, 'response') and e.response is not None:
+                        logger.error(f"{LOG_ERROR_TAG} Splunk response detail: {e.response.text}")
+                        
+                    if attempt < REQUEST_RETRIES:
+                        time.sleep(RETRY_BACKOFF_SECONDS * attempt)
+                    else:
+                        logger.error(f"{LOG_ERROR_TAG} Giving up on batch push after {REQUEST_RETRIES} attempts.")
+                        raise
+        logger.debug(f"{LOG_DEBUG_TAG} Successfully added {len(whitelist_ips)} IPs to KV Store {collection_name}")
 
 
 def push_master_threatlist(
@@ -472,19 +489,11 @@ def push_master_threatlist(
     if removed_ips:
         logger.debug(f"{LOG_DEBUG_TAG} Removing {len(removed_ips)} IPs from KV Store {collection_name} via batch query")
         
-        # Converte tutti gli IP da rimuovere nei rispettivi hash MD5
         keys_to_remove = [hashlib.md5(ip.encode('utf-8')).hexdigest() for ip in removed_ips]
-        
-        # Usa un chunk size minore (es. 50-100) per evitare l'errore HTTP 414 (URI Too Long)
-        # Un chunk di 100 MD5 genera una query URL di circa 4000 caratteri, che è un limite sicuro.
         
         for i in range(0, len(keys_to_remove), KVSTORE_DELETION_CHUNK_SIZE):
             chunk = keys_to_remove[i:i + KVSTORE_DELETION_CHUNK_SIZE]
-            
-            # Crea la query in stile MongoDB: {"_key": {"$in": ["hash1", "hash2", ...]}}
             query = {"_key": {"$in": chunk}}
-            
-            # Converte il dizionario JSON in stringa e ne fa l'URL encoding
             encoded_query = urllib.parse.quote(json.dumps(query))
             delete_url = f"{base_url}?query={encoded_query}"
             
@@ -496,20 +505,15 @@ def push_master_threatlist(
                         verify=False, 
                         timeout=REQUEST_TIMEOUT
                     )
-                    # Ignore 404 error: if the IP is already gone, the goal is achieved
                     if response.status_code not in (200, 404):
                         response.raise_for_status()
-                    break  # Success, exit the retry loop
-                    
+                    break
                 except requests.exceptions.RequestException as e:
                     logger.error(f"{LOG_ERROR_TAG} Attempt {attempt}/{REQUEST_RETRIES} failed batch deleting IPs from KV Store: {e}")
-                    
                     if hasattr(e, 'response') and e.response is not None:
                         logger.error(f"{LOG_ERROR_TAG} Splunk response detail: {e.response.text}")
-                    
                     if attempt < REQUEST_RETRIES:
-                        delay = RETRY_BACKOFF_SECONDS * attempt
-                        time.sleep(delay)
+                        time.sleep(RETRY_BACKOFF_SECONDS * attempt)
                     else:
                         logger.error(f"{LOG_ERROR_TAG} Giving up on batch delete after {REQUEST_RETRIES} attempts.")
         logger.debug(f"{LOG_DEBUG_TAG} Successfully removed {len(removed_ips)} IPs from KV Store {collection_name}")
@@ -520,10 +524,9 @@ def push_master_threatlist(
         batch_url = f"{base_url}/batch_save"
         headers = {"Content-Type": "application/json"}
         
-        # Mapping _key and ip for batch saving.
         payload = [{"_key": hashlib.md5(ip.encode('utf-8')).hexdigest(), "ip": ip} for ip in added_ips]
         
-        # Chunking payload to safely adhere to Splunk REST batch limits[cite: 3]
+        # Chunking payload to safely adhere to Splunk REST batch limits
         for i in range(0, len(payload), KVSTORE_ADDITION_CHUNK_SIZE):
             chunk = payload[i:i + KVSTORE_ADDITION_CHUNK_SIZE]
             
@@ -538,17 +541,14 @@ def push_master_threatlist(
                         timeout=REQUEST_TIMEOUT
                     )
                     response.raise_for_status()
-                    break  # Success, exit the retry loop
-                    
+                    break
                 except requests.exceptions.RequestException as e:
                     logger.error(f"{LOG_ERROR_TAG} Attempt {attempt}/{REQUEST_RETRIES} failed during batch push ({len(chunk)} items) to KV Store: {e}")
-                    
                     if hasattr(e, 'response') and e.response is not None:
                         logger.error(f"{LOG_ERROR_TAG} Splunk response detail: {e.response.text}")
                         
                     if attempt < REQUEST_RETRIES:
-                        delay = RETRY_BACKOFF_SECONDS * attempt
-                        time.sleep(delay)
+                        time.sleep(RETRY_BACKOFF_SECONDS * attempt)
                     else:
                         logger.error(f"{LOG_ERROR_TAG} Giving up on batch push after {REQUEST_RETRIES} attempts.")
         logger.debug(f"{LOG_DEBUG_TAG} Successfully added {len(added_ips)} IPs to KV Store {collection_name}")
@@ -559,8 +559,6 @@ def _generate_logs(ip_iterable: Set[str], action: str, list_name: str) -> List[s
     base_time = datetime.now(timezone.utc)
     logs = []
     
-    # Aggiungiamo 1 secondo al timestamp ogni 50.000 eventi.
-    # Questo evita il limite hardcoded di Splunk (max 1.000.000 di eventi nello stesso secondo).
     for i, ip in enumerate(ip_iterable):
         event_time = base_time + timedelta(seconds=(i // 50000))
         logs.append(
@@ -601,6 +599,7 @@ def _process_local_lookups(
     search_head_port: int,
     app_name: str,
     master_threatlist_collection: str,
+    master_whitelist_collection: str,
     manual_blacklist_collection: str,
     manual_whitelist_collection: str,
     event_writer: smi.EventWriter,
@@ -628,7 +627,6 @@ def _process_local_lookups(
     current_state_hash = _calculate_state_hash(lookups_dirs)
     previous_state_hash = _read_previous_state_hash(state_hash_path)
 
-    # Se l'hash è identico a prima E il file master_threatlist esiste, possiamo fermarci qui.
     if current_state_hash == previous_state_hash and os.path.exists(merged_path):
         logger.info(f"{LOG_INFO_TAG} No updates found in feeds (hash: {current_state_hash}). Skipping optimization to save resources.")
         return
@@ -639,25 +637,25 @@ def _process_local_lookups(
     ipv4_nets, ipv6_nets, wl_v4, wl_v6 = extract_and_filter_networks(logger, lookups_dirs)
     
     # 4. Collapse and optimize resulting valid subnets
-    new_merged_ips = optimize_ips(logger, ipv4_nets, ipv6_nets)
-    new_whitelist_ips = optimize_ips(logger, wl_v4, wl_v6)
+    new_merged_ips = optimize_ips(logger, ipv4_nets, ipv6_nets, action="blacklisted")
+    new_whitelist_ips = optimize_ips(logger, wl_v4, wl_v6, action="whitelisted")
 
-    # 5. Save locally and send master_whitelist to Search Head
-    whitelist_filename = "master_whitelist.csv"
+    # 5. Save locally and send master_whitelist to KV Store
+    whitelist_filename = f"{master_whitelist_collection}.csv"
     whitelist_path = os.path.join(lookups_dirs["master"], whitelist_filename)
     try:
         logger.debug(f"{LOG_DEBUG_TAG} Writing merged whitelist CSV locally to {whitelist_path}")
         write_merged_csv(whitelist_path, new_whitelist_ips, header="ip")
         
-        logger.debug(f"{LOG_DEBUG_TAG} Pushing merged whitelist to Search Head")
-        push_csv_lookup_to_search_head(
-            logger, splunk_username, splunk_password, search_head, search_head_port, 
-            app_name, whitelist_path, whitelist_filename
+        logger.debug(f"{LOG_DEBUG_TAG} Pushing merged whitelist to KV Store collection: {master_whitelist_collection}")
+        push_master_whitelist_to_kvstore(
+            logger, splunk_username, splunk_password, new_whitelist_ips, 
+            search_head, search_head_port, app_name, master_whitelist_collection
         )
     except Exception as e:
         logger.error(f"{LOG_ERROR_TAG} Error during whitelist generation or push: {e}")
     
-    # 6. Read existing state to calculate diff
+    # 6. Read existing state to calculate diff for threatlist
     existing_ips = read_existing_merged(merged_path)
     added_ips, removed_ips = diff_ip_lists(logger, new_merged_ips, existing_ips)
 
@@ -666,7 +664,7 @@ def _process_local_lookups(
         try:
             logger.debug(f"{LOG_DEBUG_TAG} Pushing updated differences to remote KV Store first...")
             
-            # 1. PUSH REMOTO (Punto di rottura più probabile)
+            # 1. PUSH REMOTO
             push_master_threatlist(
                 logger,
                 splunk_username,
@@ -679,12 +677,11 @@ def _process_local_lookups(
                 master_threatlist_collection
             )
             
-            # 2. COMMIT LOCALE (Atomico via OS file replace)
-            # Viene eseguito SOLO se il push remoto non ha sollevato eccezioni
+            # 2. COMMIT LOCALE
             logger.debug(f"{LOG_DEBUG_TAG} Remote push successful. Writing updated merged CSV to {merged_path}")
             write_merged_csv(merged_path, new_merged_ips, header="ip")
 
-            # 3. SCRITTURA EVENTI DI AUDIT (Solo se la transazione è completata)
+            # 3. SCRITTURA EVENTI DI AUDIT
             logger.debug(f"{LOG_DEBUG_TAG} State committed. Writing audit events to Splunk...")
             if added_ips:
                 logs_added = _generate_logs(added_ips, "added", master_threatlist_collection)
@@ -697,9 +694,6 @@ def _process_local_lookups(
                 log.events_ingested(logger, input_name, sourcetype, len(logs_removed), index)
 
         except Exception as e:
-            # Intercettiamo l'errore e usciamo in modo pulito. 
-            # Il CSV locale non viene aggiornato, quindi al prossimo avvio lo script 
-            # rileverà nuovamente lo stesso diff e riproverà l'intera operazione.
             logger.error(
                 f"{LOG_ERROR_TAG} Synchronization failed! Aborting local CSV update and event generation to maintain state consistency. Error: {e}"
             )
@@ -707,11 +701,9 @@ def _process_local_lookups(
                 f"{LOG_INFO_TAG} Will retry the synchronization on the next scheduled execution."
             )
     else:
-        # Se siamo arrivati qui, significa che l'hash è cambiato (es. file modificati manualmente) 
-        # ma il collassamento logico degli IP ha prodotto zero differenze effettive. 
-        # Dobbiamo comunque aggiornare l'hash per evitare ricalcoli ai prossimi cicli.
         _write_current_state_hash(state_hash_path, current_state_hash)
         logger.debug(f"{LOG_DEBUG_TAG} No network differences found. State hash updated.")
+
 
 def stream_events(inputs: smi.InputDefinition, event_writer: smi.EventWriter):
     for input_name, input_item in inputs.inputs.items():
@@ -736,6 +728,7 @@ def stream_events(inputs: smi.InputDefinition, event_writer: smi.EventWriter):
             app_name = input_item.get("app_name")
             
             master_threatlist_collection = input_item.get("master_threatlist_collection")
+            master_whitelist_collection = input_item.get("master_whitelist_collection")
             manual_blacklist_collection = input_item.get("manual_blacklist_collection")
             manual_whitelist_collection = input_item.get("manual_whitelist_collection")
 
@@ -754,6 +747,7 @@ def stream_events(inputs: smi.InputDefinition, event_writer: smi.EventWriter):
                 search_head_port, 
                 app_name, 
                 master_threatlist_collection,
+                master_whitelist_collection,
                 manual_blacklist_collection,
                 manual_whitelist_collection,
                 event_writer
