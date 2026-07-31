@@ -146,6 +146,26 @@
                             "required": true
                         },
                         {
+                            "field": "list_type",
+                            "label": "List Type",
+                            "type": "radio",
+                            "defaultValue": "Yes",
+                            "required": true,
+                            "options": {
+                                "items": [
+                                    {
+                                        "value": "blacklist",
+                                        "label": "Blacklist"
+                                    },
+                                    {
+                                        "value": "whitelist",
+                                        "label": "Whitelist"
+                                    }
+                                ],
+                                "display": true
+                            }
+                        },
+                        {
                             "type": "text",
                             "label": "IP matching regex",
                             "validators": [],
@@ -219,6 +239,94 @@
                             "type": "index",
                             "field": "index",
                             "label": "Index"
+                        },
+                        {
+                            "type": "text",
+                            "label": "Search Head IP/Hostname",
+                            "validators": [
+                                {
+                                    "type": "regex",
+                                    "errorMsg": "Please enter a valid IP address or hostname (do not include http:// or https://).",
+                                    "pattern": "^([a-zA-Z0-9.-]+)$"
+                                }
+                            ],
+                            "field": "search_head",
+                            "help": "The IP address or hostname of the Search Head.",
+                            "required": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "Search Head Management Port",
+                            "field": "search_head_port",
+                            "help": "Management Port number on the Search Head",
+                            "required": true,
+                            "validators": [
+                                {
+                                    "type": "number",
+                                    "errorMsg": "Management Port must be a number between 1 and 65535.",
+                                    "range": [
+                                        1,
+                                        65535
+                                    ],
+                                    "isInteger": true
+                                }
+                            ]
+                        },
+                        {
+                            "type": "text",
+                            "label": "App Name",
+                            "validators": [
+                                {
+                                    "type": "regex",
+                                    "errorMsg": "Please enter a valid app name.",
+                                    "pattern": "^[a-zA-Z]\\w*$"
+                                }
+                            ],
+                            "field": "app_name",
+                            "help": "The name of the app where all the KV Store collections reside.",
+                            "required": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "Master Threatlist",
+                            "validators": [
+                                {
+                                    "type": "regex",
+                                    "errorMsg": "Please enter a valid collection name.",
+                                    "pattern": "^[a-zA-Z]\\w*$"
+                                }
+                            ],
+                            "field": "master_threatlist_collection",
+                            "help": "The name of the Master Threatlist collection.",
+                            "required": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "Manual Blacklist",
+                            "validators": [
+                                {
+                                    "type": "regex",
+                                    "errorMsg": "Please enter a valid collection name.",
+                                    "pattern": "^[a-zA-Z]\\w*$"
+                                }
+                            ],
+                            "field": "manual_blacklist_collection",
+                            "help": "The name of the Manual Blacklist collection.",
+                            "required": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "Manual Whitelist",
+                            "validators": [
+                                {
+                                    "type": "regex",
+                                    "errorMsg": "Please enter a valid collection name.",
+                                    "pattern": "^[a-zA-Z]\\w*$"
+                                }
+                            ],
+                            "field": "manual_whitelist_collection",
+                            "help": "The name of the Manual Whitelist collection.",
+                            "required": true
                         }
                     ],
                     "inputHelperModule": "merge_ti_helper",
