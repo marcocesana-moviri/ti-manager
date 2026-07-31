@@ -588,7 +588,7 @@ def validate_input(definition: smi.ValidationDefinition):
     return
 
 
-def _process_local_lookups(
+def _process_lists(
     logger: logging.Logger,
     input_name: str,
     index: str,
@@ -736,7 +736,7 @@ def stream_events(inputs: smi.InputDefinition, event_writer: smi.EventWriter):
 
             logger.debug(f"{LOG_DEBUG_TAG} Starting merge and push process for master threatlist: {master_threatlist_collection}")
 
-            _process_local_lookups(
+            _process_lists(
                 logger, 
                 input_name, 
                 index, 
