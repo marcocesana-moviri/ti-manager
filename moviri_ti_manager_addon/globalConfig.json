@@ -149,7 +149,7 @@
                             "field": "list_type",
                             "label": "List Type",
                             "type": "radio",
-                            "defaultValue": "Yes",
+                            "defaultValue": "blacklist",
                             "required": true,
                             "options": {
                                 "items": [

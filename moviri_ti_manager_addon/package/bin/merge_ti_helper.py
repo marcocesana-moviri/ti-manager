@@ -67,6 +67,44 @@ def get_lookups_dirs() -> dict[str, str]:
     return dirs
 
 
+def _calculate_state_hash(lookups_dirs: dict[str, str]) -> str:
+    """
+    Calcola un hash MD5 cumulativo del contenuto di tutti i file CSV 
+    presenti nelle cartelle blacklists e whitelists.
+    """
+    hasher = hashlib.md5()
+    
+    # Ordiniamo le cartelle e i file per garantire che l'hash sia deterministico
+    for folder in ["blacklists", "whitelists"]:
+        folder_path = lookups_dirs[folder]
+        csv_files = sorted(glob.glob(os.path.join(folder_path, "*.csv")))
+        
+        for filepath in csv_files:
+            # Aggiungiamo il nome del file all'hash
+            hasher.update(os.path.basename(filepath).encode('utf-8'))
+            
+            # Leggiamo il contenuto a blocchi (veloce e memory-safe) per generare l'hash
+            with open(filepath, 'rb') as f:
+                for chunk in iter(lambda: f.read(4096), b""):
+                    hasher.update(chunk)
+                    
+    return hasher.hexdigest()
+
+
+def _read_previous_state_hash(hash_path: str) -> str:
+    """Legge l'hash salvato dall'esecuzione precedente."""
+    if os.path.exists(hash_path):
+        with open(hash_path, 'r', encoding='utf-8') as f:
+            return f.read().strip()
+    return ""
+
+
+def _write_current_state_hash(hash_path: str, state_hash: str) -> None:
+    """Salva il nuovo hash di stato."""
+    with open(hash_path, 'w', encoding='utf-8') as f:
+        f.write(state_hash)
+
+
 def _read_networks_from_files(logger: logging.Logger, filepaths: List[str]) -> Tuple[List[ipaddress.IPv4Network], List[ipaddress.IPv6Network]]:
     """Reads IPs/CIDRs from a list of file paths and returns IPv4 and IPv6 network objects."""
     ipv4_nets = []
@@ -152,7 +190,7 @@ def _is_overlapping(net_start: int, net_end: int, merged_ranges: List[Tuple[int,
 def extract_and_filter_networks(
     logger: logging.Logger, 
     lookups_dirs: dict[str, str]
-) -> Tuple[List[ipaddress.IPv4Network], List[ipaddress.IPv6Network]]:
+) -> Tuple[List[ipaddress.IPv4Network], List[ipaddress.IPv6Network], List[ipaddress.IPv4Network], List[ipaddress.IPv6Network]]:
     """
     Legge tutte le blacklist dalla rispettiva cartella, le whitelist dalla loro, 
     ed esclude le subnet blacklistate che si sovrappongono alle whitelist.
@@ -183,7 +221,7 @@ def extract_and_filter_networks(
         if not _is_overlapping(int(net.network_address), int(net.broadcast_address), wl_v6_ranges):
             filtered_v6.append(net)
 
-    return filtered_v4, filtered_v6
+    return filtered_v4, filtered_v6, wl_v4, wl_v6
 
 
 def optimize_ips(logger: logging.Logger, ipv4_nets: List, ipv6_nets: List) -> Set[str]:
@@ -213,7 +251,7 @@ def read_existing_merged(merged_path: str) -> Set[str]:
             lines = f.read().splitlines()
             for line in lines:
                 val = line.strip()
-                if val and val.lower() not in ("ip_address", "ip", "cidr"):
+                if val and val.lower() not in ("ip", "ip_address", "cidr"):
                     existing.add(val)
     except Exception as e:
         # Return empty set if failure reading to force a full rewrite
@@ -222,14 +260,14 @@ def read_existing_merged(merged_path: str) -> Set[str]:
     return existing
 
 
-def write_merged_csv(merged_path: str, ip_set: Set[str]) -> None:
+def write_merged_csv(merged_path: str, ip_set: Set[str], header: str = "ip") -> None:
     """Writes the new merged lookup atomically using optimized block writing."""
     directory = os.path.dirname(merged_path)
     fd, tmp_path = tempfile.mkstemp(dir=directory, suffix=".tmp")
     try:
         with os.fdopen(fd, mode="w", newline="", encoding="utf-8") as f:
             # Fast block write
-            f.write("ip_address\n")
+            f.write(f"{header}\n")
             f.write("\n".join(sorted(ip_set)))
             f.write("\n")
         os.replace(tmp_path, merged_path)
@@ -351,6 +389,65 @@ def get_manual_list_from_search_head(
 
     except requests.exceptions.RequestException as e:
         logger.error(f"{LOG_ERROR_TAG} Irreversible error retrieving list '{collection_name}' from KV Store: {e}")
+
+
+def push_csv_lookup_to_search_head(
+    logger: logging.Logger,
+    splunk_username: str,
+    splunk_password: str,
+    search_head: str,
+    search_head_port: int,
+    app_name: str,
+    csv_filepath: str,
+    lookup_filename: str
+) -> None:
+    """
+    Uploads a CSV file directly as a Lookup Table File to the Search Head via REST API.
+    Implements retry and backoff in case of network or API errors.
+    """
+    url = f"https://{search_head}:{search_head_port}/servicesNS/nobody/{app_name}/data/lookup-table-files/{lookup_filename}"
+    auth_tuple = (splunk_username, splunk_password)
+
+    logger.debug(f"{LOG_DEBUG_TAG} Starting upload of CSV lookup '{lookup_filename}' to {url}")
+
+    if not os.path.exists(csv_filepath):
+        logger.error(f"{LOG_ERROR_TAG} CSV file not found at path: {csv_filepath}")
+        return
+
+    for attempt in range(1, REQUEST_RETRIES + 1):
+        try:
+            # File is opened inside the loop to ensure the pointer is at the beginning 
+            # (byte 0) on every new retry attempt.
+            with open(csv_filepath, "rb") as f:
+                # Splunk expects the multipart form-data in the 'eai:data' parameter
+                files = {"eai:data": (lookup_filename, f, "text/csv")}
+                
+                response = requests.post(
+                    url,
+                    auth=auth_tuple,
+                    files=files,
+                    verify=False,
+                    timeout=REQUEST_TIMEOUT,
+                    data={"output_mode": "json"}
+                )
+                response.raise_for_status()
+                
+            logger.info(f"{LOG_INFO_TAG} CSV lookup '{lookup_filename}' successfully uploaded to the Search Head.")
+            break  # Success, exit the retry loop
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"{LOG_ERROR_TAG} Attempt {attempt}/{REQUEST_RETRIES} failed to upload CSV '{lookup_filename}': {e}")
+            
+            # Print Splunk's exact error message if available
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"{LOG_ERROR_TAG} Splunk response detail: {e.response.text}")
+                
+            if attempt < REQUEST_RETRIES:
+                delay = RETRY_BACKOFF_SECONDS * attempt
+                logger.debug(f"{LOG_DEBUG_TAG} Retrying in {delay}s (attempt {attempt + 1}/{REQUEST_RETRIES})")
+                time.sleep(delay)
+            else:
+                logger.error(f"{LOG_ERROR_TAG} Giving up on uploading CSV '{lookup_filename}' after {REQUEST_RETRIES} attempts.")
 
 
 def push_master_threatlist(
@@ -512,6 +609,7 @@ def _process_local_lookups(
     lookups_dirs = get_lookups_dirs()
     merged_csv_filename = f"{master_threatlist_collection}.csv"
     merged_path = os.path.join(lookups_dirs["master"], merged_csv_filename)
+    state_hash_path = os.path.join(lookups_dirs["master"], "state.hash")
 
     # 1. Retrieve manual blacklist collection from Splunk KV Store
     get_manual_list_from_search_head(
@@ -525,17 +623,45 @@ def _process_local_lookups(
         splunk_username, splunk_password, app_name, manual_whitelist_collection
     )
 
+    # Check hash to (eventually) skip the execution
+    logger.debug(f"{LOG_DEBUG_TAG} Calculate the state hash of all the source files...")
+    current_state_hash = _calculate_state_hash(lookups_dirs)
+    previous_state_hash = _read_previous_state_hash(state_hash_path)
+
+    # Se l'hash è identico a prima E il file master_threatlist esiste, possiamo fermarci qui.
+    if current_state_hash == previous_state_hash and os.path.exists(merged_path):
+        logger.info(f"{LOG_INFO_TAG} No updates found in feeds (hash: {current_state_hash}). Skipping optimization to save resources.")
+        return
+    
+    logger.debug(f"{LOG_DEBUG_TAG} Found updates or first run. Start processing (old hash: {previous_state_hash} -> new: {current_state_hash})")
+
     # 3. Parse and filter networks (excludes whitelists dynamically)
-    ipv4_nets, ipv6_nets = extract_and_filter_networks(logger, lookups_dirs)
+    ipv4_nets, ipv6_nets, wl_v4, wl_v6 = extract_and_filter_networks(logger, lookups_dirs)
     
     # 4. Collapse and optimize resulting valid subnets
     new_merged_ips = optimize_ips(logger, ipv4_nets, ipv6_nets)
+    new_whitelist_ips = optimize_ips(logger, wl_v4, wl_v6)
+
+    # 5. Save locally and send master_whitelist to Search Head
+    whitelist_filename = "master_whitelist.csv"
+    whitelist_path = os.path.join(lookups_dirs["master"], whitelist_filename)
+    try:
+        logger.debug(f"{LOG_DEBUG_TAG} Writing merged whitelist CSV locally to {whitelist_path}")
+        write_merged_csv(whitelist_path, new_whitelist_ips, header="ip")
+        
+        logger.debug(f"{LOG_DEBUG_TAG} Pushing merged whitelist to Search Head")
+        push_csv_lookup_to_search_head(
+            logger, splunk_username, splunk_password, search_head, search_head_port, 
+            app_name, whitelist_path, whitelist_filename
+        )
+    except Exception as e:
+        logger.error(f"{LOG_ERROR_TAG} Error during whitelist generation or push: {e}")
     
-    # 5. Read existing state to calculate diff
+    # 6. Read existing state to calculate diff
     existing_ips = read_existing_merged(merged_path)
     added_ips, removed_ips = diff_ip_lists(logger, new_merged_ips, existing_ips)
 
-    # 6 & 7. Pseudo-Atomic Synchronization (KV Store -> Local CSV -> Splunk Events)
+    # 7 & 8. Pseudo-Atomic Synchronization (KV Store -> Local CSV -> Splunk Events)
     if added_ips or removed_ips or not os.path.exists(merged_path):
         try:
             logger.debug(f"{LOG_DEBUG_TAG} Pushing updated differences to remote KV Store first...")
@@ -556,7 +682,7 @@ def _process_local_lookups(
             # 2. COMMIT LOCALE (Atomico via OS file replace)
             # Viene eseguito SOLO se il push remoto non ha sollevato eccezioni
             logger.debug(f"{LOG_DEBUG_TAG} Remote push successful. Writing updated merged CSV to {merged_path}")
-            write_merged_csv(merged_path, new_merged_ips)
+            write_merged_csv(merged_path, new_merged_ips, header="ip")
 
             # 3. SCRITTURA EVENTI DI AUDIT (Solo se la transazione è completata)
             logger.debug(f"{LOG_DEBUG_TAG} State committed. Writing audit events to Splunk...")
@@ -580,7 +706,12 @@ def _process_local_lookups(
             logger.info(
                 f"{LOG_INFO_TAG} Will retry the synchronization on the next scheduled execution."
             )
-
+    else:
+        # Se siamo arrivati qui, significa che l'hash è cambiato (es. file modificati manualmente) 
+        # ma il collassamento logico degli IP ha prodotto zero differenze effettive. 
+        # Dobbiamo comunque aggiornare l'hash per evitare ricalcoli ai prossimi cicli.
+        _write_current_state_hash(state_hash_path, current_state_hash)
+        logger.debug(f"{LOG_DEBUG_TAG} No network differences found. State hash updated.")
 
 def stream_events(inputs: smi.InputDefinition, event_writer: smi.EventWriter):
     for input_name, input_item in inputs.inputs.items():

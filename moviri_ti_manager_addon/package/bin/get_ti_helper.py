@@ -1,4 +1,3 @@
-import csv
 import ipaddress
 import logging
 import os
