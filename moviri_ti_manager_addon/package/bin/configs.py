@@ -1,3 +1,5 @@
+import ipaddress
+
 ### GLOBAL CONFIGS ###
 ADDON_NAME = "moviri_ti_manager_addon"
 ADDON_VERSION = "0.0.1"
@@ -21,3 +23,13 @@ RETRY_BACKOFF_SECONDS = 2
 KVSTORE_LIMIT = 50000
 KVSTORE_ADDITION_CHUNK_SIZE = 1000
 KVSTORE_DELETION_CHUNK_SIZE = 100
+
+### WHITELIST PRIVATE IPs ###
+STATIC_PRIVATE_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("100.64.0.0/10"),
+]

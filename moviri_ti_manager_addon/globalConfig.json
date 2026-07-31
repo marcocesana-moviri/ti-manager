@@ -175,7 +175,9 @@
                         }
                     ],
                     "inputHelperModule": "get_ti_helper",
-                    "title": "Get Threat Intelligence"
+                    "title": "Get Threat Intelligence",
+                    "restHandlerModule": "ti_manager_custom_handler_rh",
+                    "restHandlerClass": "TiManagerCustomHandler"
                 },
                 {
                     "name": "merge_ti",

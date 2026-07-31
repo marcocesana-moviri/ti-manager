@@ -28,7 +28,8 @@ from configs import (
     KVSTORE_DELETION_CHUNK_SIZE,
     REQUEST_TIMEOUT,
     REQUEST_RETRIES,
-    RETRY_BACKOFF_SECONDS
+    RETRY_BACKOFF_SECONDS,
+    STATIC_PRIVATE_NETWORKS
 )
 
 def logger_for_input(input_name: str) -> logging.Logger:
@@ -159,6 +160,9 @@ def extract_and_filter_networks(
     # 1. Lettura dinamica di TUTTE le whitelist
     wl_files = glob.glob(os.path.join(lookups_dirs["whitelists"], "*.csv"))
     wl_v4, wl_v6 = _read_networks_from_files(logger, wl_files)
+
+    # Considera SEMPRE in whitelist gli ip/subnet privati
+    wl_v4.extend(STATIC_PRIVATE_NETWORKS)
     
     # Pre-calcolo degli intervalli per le whitelist
     wl_v4_ranges = _build_merged_ranges(wl_v4)
