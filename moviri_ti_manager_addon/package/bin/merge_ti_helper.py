@@ -8,7 +8,6 @@ import json
 import urllib.parse
 import requests
 import time
-import bisect
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Tuple, List, Set
 
@@ -105,41 +104,72 @@ def _write_current_state_hash(hash_path: str, state_hash: str) -> None:
         f.write(state_hash)
 
 
-def _read_networks_from_files(logger: logging.Logger, filepaths: List[str]) -> Tuple[List[ipaddress.IPv4Network], List[ipaddress.IPv6Network]]:
-    """Reads IPs/CIDRs from a list of file paths and returns IPv4 and IPv6 network objects."""
-    ipv4_nets = []
-    ipv6_nets = []
+def _read_networks_from_files(logger: logging.Logger, filepaths: List[str], list_type: str) -> Tuple[List[ipaddress.IPv4Network], List[ipaddress.IPv6Network]]:
+    """Reads IPs/CIDRs from a list of files."""
+    ipv4_nets, ipv6_nets = [], []
+    start_time = time.time()
     
     for filepath in filepaths:
         if not os.path.exists(filepath):
             continue
-            
-        filename = os.path.basename(filepath)
-        logger.debug(f"{LOG_DEBUG_TAG} Reading source CSV: {filename}")
         try:
             with open(filepath, mode="r", encoding="utf-8") as f:
-                # Fast block read for millions of lines instead of csv module
-                lines = f.read().splitlines()
-                
-            for line in lines:
-                candidate = line.strip()
-                # Skip headers and empty lines
-                if not candidate or candidate.lower() in ("ip", "ip_address", "cidr"):
-                    continue
-                    
-                try:
-                    # strict=False converts host bits safely into correct subnets
-                    net = ipaddress.ip_network(candidate, strict=False)
-                    if net.version == 4:
-                        ipv4_nets.append(net)
-                    else:
-                        ipv6_nets.append(net)
-                except ValueError:
-                    pass
+                for line in f.read().splitlines():
+                    candidate = line.strip()
+                    if not candidate or candidate.lower() in ("ip", "ip_address", "cidr"):
+                        continue
+                    try:
+                        net = ipaddress.ip_network(candidate, strict=False)
+                        if net.version == 4: ipv4_nets.append(net)
+                        else: ipv6_nets.append(net)
+                    except ValueError:
+                        pass
         except Exception as e:
-            logger.warning(f"{LOG_WARNING_TAG} Error reading {filename}: {e}")
+            logger.warning(f"{LOG_WARNING_TAG} [READ ERROR] File {filepath}: {e}")
             
+    logger.debug(f"{LOG_DEBUG_TAG} [I/O] Read {len(filepaths)} {list_type} files. Loaded {len(ipv4_nets)+len(ipv6_nets)} total raw networks. (Elapsed: {time.time() - start_time:.2f}s)")
     return ipv4_nets, ipv6_nets
+
+
+def _subtract_ranges(bl_ranges: List[Tuple[int, int]], wl_ranges: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+    """
+    Sottrae chirurgicamente gli intervalli Whitelist dagli intervalli Blacklist.
+    Algoritmo a doppio puntatore con complessità temporale lineare O(N + M).
+    """
+    result = []
+    wl_idx = 0
+    wl_len = len(wl_ranges)
+    
+    for b_start, b_end in bl_ranges:
+        current_start = b_start
+        
+        # Avanza l'indice whitelist finché non troviamo un range potenzialmente intersecante
+        while wl_idx < wl_len and wl_ranges[wl_idx][1] < current_start:
+            wl_idx += 1
+            
+        temp_wl_idx = wl_idx
+        
+        # Scorri tutte le whitelist che si sovrappongono a questo specifico range della blacklist
+        while temp_wl_idx < wl_len and wl_ranges[temp_wl_idx][0] <= b_end:
+            w_start, w_end = wl_ranges[temp_wl_idx]
+            
+            # Se c'è uno spazio prima dell'intersezione whitelist, conservalo
+            if current_start < w_start:
+                result.append((current_start, w_start - 1))
+                
+            # Salta la parte coperta dalla whitelist
+            current_start = max(current_start, w_end + 1)
+            
+            if current_start > b_end:
+                break
+                
+            temp_wl_idx += 1
+            
+        # Se dopo tutte le intersezioni avanza ancora spazio nella blacklist, conservalo
+        if current_start <= b_end:
+            result.append((current_start, b_end))
+            
+    return result
 
 
 def _build_merged_ranges(networks: List) -> List[Tuple[int, int]]:
@@ -165,63 +195,60 @@ def _build_merged_ranges(networks: List) -> List[Tuple[int, int]]:
     return merged
 
 
-def _is_overlapping(net_start: int, net_end: int, merged_ranges: List[Tuple[int, int]]) -> bool:
-    """Checks if a given integer network range overlaps with any merged whitelist ranges using Binary Search."""
-    if not merged_ranges:
-        return False
-        
-    idx = bisect.bisect_right(merged_ranges, (net_start, float('inf')))
-    
-    # Check range directly before insertion point
-    if idx > 0:
-        _, wl_end = merged_ranges[idx - 1]
-        if wl_end >= net_start:
-            return True
-            
-    # Check range at insertion point
-    if idx < len(merged_ranges):
-        wl_start, _ = merged_ranges[idx]
-        if wl_start <= net_end:
-            return True
-            
-    return False
-
-
-def extract_and_filter_networks(
-    logger: logging.Logger, 
-    lookups_dirs: dict[str, str]
-) -> Tuple[List[ipaddress.IPv4Network], List[ipaddress.IPv6Network], List[ipaddress.IPv4Network], List[ipaddress.IPv6Network]]:
+def extract_and_filter_networks(logger: logging.Logger, lookups_dirs: dict[str, str]) -> Tuple[Set[str], Set[str]]:
     """
-    Legge tutte le blacklist dalla rispettiva cartella, le whitelist dalla loro, 
-    ed esclude le subnet blacklistate che si sovrappongono alle whitelist.
+    Main Logic: Reads raw feeds, maps them to interval trees, and applies 
+    mathematical subtraction (O(N+M)) to surgically separate whitelist exceptions.
     """
-    # 1. Lettura dinamica di TUTTE le whitelist
+    # 1. RAW READ
     wl_files = glob.glob(os.path.join(lookups_dirs["whitelists"], "*.csv"))
-    wl_v4, wl_v6 = _read_networks_from_files(logger, wl_files)
-
-    # Considera SEMPRE in whitelist gli ip/subnet privati
+    wl_v4, wl_v6 = _read_networks_from_files(logger, wl_files, "Whitelist")
     wl_v4.extend(STATIC_PRIVATE_NETWORKS)
     
-    # Pre-calcolo degli intervalli per le whitelist
+    bl_files = glob.glob(os.path.join(lookups_dirs["blacklists"], "*.csv"))
+    raw_bl_v4, raw_bl_v6 = _read_networks_from_files(logger, bl_files, "Blacklist")
+    
+    # 2. INTERVAL CREATION (This step also acts as a native "collapse")
+    t_start = time.time()
     wl_v4_ranges = _build_merged_ranges(wl_v4)
     wl_v6_ranges = _build_merged_ranges(wl_v6)
+    bl_v4_ranges = _build_merged_ranges(raw_bl_v4)
+    bl_v6_ranges = _build_merged_ranges(raw_bl_v6)
+    logger.debug(f"{LOG_DEBUG_TAG} [INTERVALS] Continuous intervals generated and collapsed in {time.time() - t_start:.2f}s")
     
-    # 2. Lettura dinamica di TUTTE le blacklist
-    bl_files = glob.glob(os.path.join(lookups_dirs["blacklists"], "*.csv"))
-    raw_bl_v4, raw_bl_v6 = _read_networks_from_files(logger, bl_files)
+    # 3. SURGICAL MATHEMATICAL SUBTRACTION
+    t_start = time.time()
+    filtered_v4_ranges = _subtract_ranges(bl_v4_ranges, wl_v4_ranges)
+    filtered_v6_ranges = _subtract_ranges(bl_v6_ranges, wl_v6_ranges)
+    logger.debug(f"{LOG_DEBUG_TAG} [SUBTRACTION] Overlaps removed in {time.time() - t_start:.2f}s")
     
-    # 3. Filtraggio delle blacklist
-    filtered_v4 = []
-    for net in raw_bl_v4:
-        if not _is_overlapping(int(net.network_address), int(net.broadcast_address), wl_v4_ranges):
-            filtered_v4.append(net)
+    # 4. CIDR RECONVERSION (summarize_address_range converts integers back to optimal CIDR blocks)
+    t_start = time.time()
+    final_bl_set = set()
+    final_wl_set = set()
+    
+    for start, end in filtered_v4_ranges:
+        for net in ipaddress.summarize_address_range(ipaddress.IPv4Address(start), ipaddress.IPv4Address(end)):
+            final_bl_set.add(str(net))
             
-    filtered_v6 = []
-    for net in raw_bl_v6:
-        if not _is_overlapping(int(net.network_address), int(net.broadcast_address), wl_v6_ranges):
-            filtered_v6.append(net)
-
-    return filtered_v4, filtered_v6, wl_v4, wl_v6
+    for start, end in filtered_v6_ranges:
+        for net in ipaddress.summarize_address_range(ipaddress.IPv6Address(start), ipaddress.IPv6Address(end)):
+            final_bl_set.add(str(net))
+            
+    # Rebuild the clean and collapsed whitelist similarly
+    for start, end in wl_v4_ranges:
+        for net in ipaddress.summarize_address_range(ipaddress.IPv4Address(start), ipaddress.IPv4Address(end)):
+            final_wl_set.add(str(net))
+            
+    for start, end in wl_v6_ranges:
+        for net in ipaddress.summarize_address_range(ipaddress.IPv6Address(start), ipaddress.IPv6Address(end)):
+            final_wl_set.add(str(net))
+            
+    logger.info(
+        f"{LOG_INFO_TAG} [CIDR REBUILD] Final lists rebuilt. Blacklist: {len(final_bl_set)} subnet(s), Whitelist: {len(final_wl_set)} subnet(s). (Elapsed: {time.time() - t_start:.2f}s)"
+    )
+    
+    return final_bl_set, final_wl_set
 
 
 def optimize_ips(logger: logging.Logger, ipv4_nets: List, ipv6_nets: List, action: str) -> Set[str]:
@@ -606,103 +633,70 @@ def _process_lists(
 ) -> None:
     
     lookups_dirs = get_lookups_dirs()
-    merged_csv_filename = f"{master_threatlist_collection}.csv"
-    merged_path = os.path.join(lookups_dirs["master"], merged_csv_filename)
+    merged_path = os.path.join(lookups_dirs["master"], f"{master_threatlist_collection}.csv")
     state_hash_path = os.path.join(lookups_dirs["master"], "state.hash")
 
-    # 1. Retrieve manual blacklist collection from Splunk KV Store
-    get_manual_list_from_search_head(
-        logger, lookups_dirs["blacklists"], search_head, search_head_port, 
-        splunk_username, splunk_password, app_name, manual_blacklist_collection
-    )
-    
-    # 2. Retrieve manual whitelist collection from Splunk KV Store
-    get_manual_list_from_search_head(
-        logger, lookups_dirs["whitelists"], search_head, search_head_port, 
-        splunk_username, splunk_password, app_name, manual_whitelist_collection
-    )
+    logger.info(f"{LOG_INFO_TAG} [SYNC START] Beginning synchronization cycle for {input_name}")
 
-    # Check hash to (eventually) skip the execution
-    logger.debug(f"{LOG_DEBUG_TAG} Calculate the state hash of all the source files...")
+    # 1. RETRIEVE MANUAL LISTS
+    get_manual_list_from_search_head(logger, lookups_dirs["blacklists"], search_head, search_head_port, splunk_username, splunk_password, app_name, manual_blacklist_collection)
+    get_manual_list_from_search_head(logger, lookups_dirs["whitelists"], search_head, search_head_port, splunk_username, splunk_password, app_name, manual_whitelist_collection)
+
+    # 2. STATE HASH CHECK
     current_state_hash = _calculate_state_hash(lookups_dirs)
     previous_state_hash = _read_previous_state_hash(state_hash_path)
 
     if current_state_hash == previous_state_hash and os.path.exists(merged_path):
-        logger.info(f"{LOG_INFO_TAG} No updates found in feeds (hash: {current_state_hash}). Skipping optimization to save resources.")
+        logger.info(f"{LOG_INFO_TAG} [SYNC SKIP] No changes detected in source feeds (Hash: {current_state_hash}). Skipping intensive processing.")
         return
     
-    logger.debug(f"{LOG_DEBUG_TAG} Found updates or first run. Start processing (old hash: {previous_state_hash} -> new: {current_state_hash})")
+    logger.info(f"{LOG_INFO_TAG} [SYNC PROCEED] Changes detected. Proceeding with network optimization...")
 
-    # 3. Parse and filter networks (excludes whitelists dynamically)
-    ipv4_nets, ipv6_nets, wl_v4, wl_v6 = extract_and_filter_networks(logger, lookups_dirs)
+    # 3. EXTRACTION & FILTERING
+    # Grazie all'ottimizzazione, le reti escono già convertite in SET di stringhe pronte all'uso.
+    new_merged_bl, new_merged_wl = extract_and_filter_networks(logger, lookups_dirs)
     
-    # 4. Collapse and optimize resulting valid subnets
-    new_merged_ips = optimize_ips(logger, ipv4_nets, ipv6_nets, action="blacklisted")
-    new_whitelist_ips = optimize_ips(logger, wl_v4, wl_v6, action="whitelisted")
-
-    # 5. Save locally and send master_whitelist to KV Store
+    # 4. WHITELIST PUSH (Unconditional)
     whitelist_filename = f"{master_whitelist_collection}.csv"
     whitelist_path = os.path.join(lookups_dirs["master"], whitelist_filename)
     try:
-        logger.debug(f"{LOG_DEBUG_TAG} Writing merged whitelist CSV locally to {whitelist_path}")
-        write_merged_csv(whitelist_path, new_whitelist_ips, header="ip")
-        
-        logger.debug(f"{LOG_DEBUG_TAG} Pushing merged whitelist to KV Store collection: {master_whitelist_collection}")
-        push_master_whitelist_to_kvstore(
-            logger, splunk_username, splunk_password, new_whitelist_ips, 
-            search_head, search_head_port, app_name, master_whitelist_collection
-        )
+        write_merged_csv(whitelist_path, new_merged_wl, header="ip")
+        push_master_whitelist_to_kvstore(logger, splunk_username, splunk_password, new_merged_wl, search_head, search_head_port, app_name, master_whitelist_collection)
     except Exception as e:
-        logger.error(f"{LOG_ERROR_TAG} Error during whitelist generation or push: {e}")
+        logger.error(f"{LOG_ERROR_TAG} [SYNC ERROR] Whitelist synchronization failed: {e}")
     
-    # 6. Read existing state to calculate diff for threatlist
-    existing_ips = read_existing_merged(merged_path)
-    added_ips, removed_ips = diff_ip_lists(logger, new_merged_ips, existing_ips)
+    # 5. BLACKLIST DIFF CALCULATION
+    existing_bl = read_existing_merged(merged_path)
+    added_ips, removed_ips = diff_ip_lists(logger, new_merged_bl, existing_bl)
 
-    # 7 & 8. Pseudo-Atomic Synchronization (KV Store -> Local CSV -> Splunk Events)
+    # 6. BLACKLIST PUSH (Conditional)
     if added_ips or removed_ips or not os.path.exists(merged_path):
         try:
-            logger.debug(f"{LOG_DEBUG_TAG} Pushing updated differences to remote KV Store first...")
+            # PUSH REMOTO
+            logger.info(f"{LOG_INFO_TAG} [KVSTORE PUSH] Propagating Threatlist diffs to Splunk...")
+            push_master_threatlist(logger, splunk_username, splunk_password, added_ips, removed_ips, search_head, search_head_port, app_name, master_threatlist_collection)
             
-            # 1. PUSH REMOTO
-            push_master_threatlist(
-                logger,
-                splunk_username,
-                splunk_password,
-                added_ips,
-                removed_ips,
-                search_head,
-                search_head_port,
-                app_name,
-                master_threatlist_collection
-            )
-            
-            # 2. COMMIT LOCALE
-            logger.debug(f"{LOG_DEBUG_TAG} Remote push successful. Writing updated merged CSV to {merged_path}")
-            write_merged_csv(merged_path, new_merged_ips, header="ip")
+            # COMMIT LOCALE
+            write_merged_csv(merged_path, new_merged_bl, header="ip")
 
-            # 3. SCRITTURA EVENTI DI AUDIT
-            logger.debug(f"{LOG_DEBUG_TAG} State committed. Writing audit events to Splunk...")
+            # AUDIT EVENTS
             if added_ips:
                 logs_added = _generate_logs(added_ips, "added", master_threatlist_collection)
                 write_events(index, sourcetype, logs_added, input_name, event_writer, logger)
-                log.events_ingested(logger, input_name, sourcetype, len(logs_added), index)
-
             if removed_ips:
                 logs_removed = _generate_logs(removed_ips, "removed", master_threatlist_collection)
                 write_events(index, sourcetype, logs_removed, input_name, event_writer, logger)
-                log.events_ingested(logger, input_name, sourcetype, len(logs_removed), index)
+                
+            log.events_ingested(logger, input_name, sourcetype, len(added_ips) + len(removed_ips), index)
+            logger.info(f"{LOG_INFO_TAG} [SYNC SUCCESS] Synchronization cycle completed successfully.")
 
         except Exception as e:
-            logger.error(
-                f"{LOG_ERROR_TAG} Synchronization failed! Aborting local CSV update and event generation to maintain state consistency. Error: {e}"
-            )
-            logger.info(
-                f"{LOG_INFO_TAG} Will retry the synchronization on the next scheduled execution."
-            )
-    else:
-        _write_current_state_hash(state_hash_path, current_state_hash)
-        logger.debug(f"{LOG_DEBUG_TAG} No network differences found. State hash updated.")
+            logger.error(f"{LOG_ERROR_TAG} [CRITICAL] Blacklist Sync failed. Rolling back local state. Error: {e}")
+            return # Ferma qui, non aggiornare l'hash.
+            
+    # Alla fine, solo se tutto è andato bene, aggiorniamo l'hash
+    _write_current_state_hash(state_hash_path, current_state_hash)
+    logger.debug(f"{LOG_DEBUG_TAG} [STATE] State hash updated successfully.")
 
 
 def stream_events(inputs: smi.InputDefinition, event_writer: smi.EventWriter):
