@@ -581,6 +581,76 @@ def push_master_threatlist(
         logger.debug(f"{LOG_DEBUG_TAG} Successfully added {len(added_ips)} IPs to KV Store {collection_name}")
 
 
+def update_remote_csv_lookup(
+    logger: logging.Logger,
+    splunk_username: str,
+    splunk_password: str,
+    search_head: str,
+    search_head_port: int,
+    app_name: str,
+    collection_name: str
+) -> None:
+    """
+    Executes a remote SPL search to dump the KV Store collection into a CSV lookup.
+    SPL: | inputlookup <collection> | outputlookup <collection>_csv.csv
+    """
+    url = f"https://{search_head}:{search_head_port}/servicesNS/nobody/{app_name}/search/jobs"
+    auth_tuple = (splunk_username, splunk_password)
+
+    # AGGIUNTO IL SUFFISSO .csv OBBLIGATORIO PER OUTPUTLOOKUP
+    csv_name = f"{collection_name}_csv"
+    spl_query = f"| inputlookup {collection_name} | outputlookup {csv_name}"
+
+    payload = {
+        "search": spl_query,
+        "exec_mode": "oneshot",
+        "output_mode": "json"  # Richiediamo esplicitamente l'output in JSON per leggere i warning
+    }
+
+    logger.debug(f"{LOG_DEBUG_TAG} Executing remote search to update CSV lookup: {spl_query}")
+
+    for attempt in range(1, REQUEST_RETRIES + 1):
+        try:
+            response = requests.post(
+                url,
+                auth=auth_tuple,
+                data=payload,
+                verify=False,
+                timeout=REQUEST_TIMEOUT * 2
+            )
+            response.raise_for_status()
+            
+            # PARSING DEGLI ERRORI SILENZIOSI DI SPLUNK
+            try:
+                response_data = response.json()
+                messages = response_data.get("messages", [])
+                
+                # Controlliamo se Splunk ci ha restituito un errore FATAL o ERROR 
+                # (es. problemi di permessi, lookup inesistente, quote superate)
+                for msg in messages:
+                    msg_type = msg.get("type", "").upper()
+                    if msg_type in ("FATAL", "ERROR"):
+                        logger.error(f"{LOG_ERROR_TAG} [CSV EXPORT] SPL Search failed internally: {msg.get('text')}")
+                        return # Usciamo senza stampare il messaggio di successo
+            except ValueError:
+                # Se la risposta non è in JSON per qualche anomalia, passiamo oltre
+                pass
+                
+            logger.info(f"{LOG_INFO_TAG} [CSV EXPORT] Successfully updated remote CSV lookup '{csv_name}' via SPL.")
+            break
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"{LOG_ERROR_TAG} Attempt {attempt}/{REQUEST_RETRIES} failed to execute remote search: {e}")
+            
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"{LOG_ERROR_TAG} Splunk response detail: {e.response.text}")
+                
+            if attempt < REQUEST_RETRIES:
+                time.sleep(RETRY_BACKOFF_SECONDS * attempt)
+            else:
+                logger.error(f"{LOG_ERROR_TAG} Giving up on updating remote CSV lookup after {REQUEST_RETRIES} attempts.")
+
+
 def _generate_logs(ip_iterable: Set[str], action: str, list_name: str) -> List[str]:
     """Generates standard Splunk event strings, spreading timestamps to avoid Splunk limits."""
     base_time = datetime.now(timezone.utc)
@@ -688,6 +758,17 @@ def _process_lists(
                 write_events(index, sourcetype, logs_removed, input_name, event_writer, logger)
                 
             log.events_ingested(logger, input_name, sourcetype, len(added_ips) + len(removed_ips), index)
+
+            logger.info(f"{LOG_INFO_TAG} [KVSTORE PUSH] Changes pushed. Triggering remote CSV export via SPL...")
+            update_remote_csv_lookup(
+                logger, 
+                splunk_username, 
+                splunk_password, 
+                search_head, 
+                search_head_port, 
+                app_name, 
+                master_threatlist_collection
+            )
             logger.info(f"{LOG_INFO_TAG} [SYNC SUCCESS] Synchronization cycle completed successfully.")
 
         except Exception as e:
