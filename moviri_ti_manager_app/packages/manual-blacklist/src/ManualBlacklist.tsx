@@ -21,7 +21,7 @@ interface IPRow {
     ip: string;
     user: string;
     reason: string;
-    timestamp?: string; // Nuovo campo opzionale per retrocompatibilità
+    timestamp: string;
 }
 
 const splunkFetch = (url: string, options: RequestInit = {}) => {
@@ -36,8 +36,10 @@ const splunkFetch = (url: string, options: RequestInit = {}) => {
 };
 
 const isValidCIDR = (cidr: string): boolean => {
-    const cidrRegex =
-        /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\/([0-9]|[1-2][0-9]|3[0-2])$/;
+    const octet = '(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9][0-9]|[0-9])';
+    const cidrRegex = new RegExp(
+        `^${octet}\\.${octet}\\.${octet}\\.${octet}\\/([0-9]|[1-2][0-9]|3[0-2])$`,
+    );
     return cidrRegex.test(cidr);
 };
 
@@ -167,7 +169,7 @@ const ManualBlacklist: React.FC = () => {
     };
 
     // --- Action Handlers ---
-    const handleSort = (e: React.MouseEvent, { sortKey: newSortKey }: { sortKey: string }) => {
+    const handleSort = (e: any, { sortKey: newSortKey }: any) => {
         if (sortKey === newSortKey) {
             setSortDir((prev) => (prev === 'asc' ? 'desc' : prev === 'desc' ? 'none' : 'asc'));
             if (sortDir === 'desc') setSortKey('none');
@@ -315,7 +317,7 @@ const ManualBlacklist: React.FC = () => {
         const invalidEntries = parsedData.filter((entry) => !isValidCIDR(entry.ip));
         if (invalidEntries.length > 0) {
             setError(
-                `Upload blocked: Found ${invalidEntries.length} invalid CIDR formats (e.g., "${invalidEntries[0].ip}"). Ensure CSV format is IP,User,Reason.`,
+                `Upload blocked: Found ${invalidEntries.length} invalid CIDR formats (e.g., "${invalidEntries[0].ip}"). Ensure file format is IP,User,Reason.`,
             );
             setIsLoading(false);
             return;
@@ -545,7 +547,7 @@ const ManualBlacklist: React.FC = () => {
                     </span>
                     <Select
                         value={pageSize}
-                        onChange={(e, { value }: { value: number }) => setPageSize(value)}
+                        onChange={(e: any, data: any) => setPageSize(data.value)}
                         style={{ width: '80px' }}
                     >
                         <Select.Option label="5" value={5} />
@@ -646,7 +648,6 @@ const ManualBlacklist: React.FC = () => {
                                             appearance="destructive"
                                             onClick={() => handleRemoveIp(row._key)}
                                             disabled={isLoading}
-                                            size="small"
                                         />
                                     </Table.Cell>
                                 </Table.Row>

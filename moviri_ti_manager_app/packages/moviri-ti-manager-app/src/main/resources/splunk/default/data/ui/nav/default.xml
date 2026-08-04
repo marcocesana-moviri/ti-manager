@@ -1,1 +1,4 @@
-<nav><view name="ManualBlacklist" default="true"/></nav>
+<nav>
+  <view name="ManualBlacklist" default="true"/>
+  <view name="ManualWhitelist"/>
+</nav>
