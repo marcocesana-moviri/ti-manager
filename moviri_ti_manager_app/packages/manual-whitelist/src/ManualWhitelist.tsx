@@ -102,15 +102,43 @@ const ManualWhitelist: React.FC = () => {
     const fetchIps = async () => {
         setIsLoading(true);
         setError(null);
+
         try {
-            const response = await splunkFetch(KV_STORE_URL);
-            if (response.ok) {
-                const data: IPRow[] = await response.json();
-                setIps(data);
-            } else {
-                const errorText = await response.text();
-                setError(`Failed to fetch data (${response.status}): ${errorText}`);
+            let allFetchedIps: IPRow[] = [];
+            let currentSkip = 0;
+            const CHUNK_LIMIT = 50000; // Usiamo il limite di sicurezza standard di Splunk
+            let keepFetching = true;
+
+            // Continuiamo a chiedere dati finché Splunk non ci restituisce un blocco incompleto
+            while (keepFetching) {
+                const response = await splunkFetch(
+                    `${KV_STORE_URL}?limit=${CHUNK_LIMIT}&skip=${currentSkip}`,
+                );
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(
+                        `Failed to fetch chunk at skip ${currentSkip} (${response.status}): ${errorText}`,
+                    );
+                }
+
+                const chunk: IPRow[] = await response.json();
+
+                // Uniamo il nuovo blocco ai dati già scaricati
+                allFetchedIps = [...allFetchedIps, ...chunk];
+
+                // Se Splunk ci restituisce meno record di quelli che abbiamo chiesto,
+                // significa che abbiamo raggiunto la fine del database.
+                if (chunk.length < CHUNK_LIMIT) {
+                    keepFetching = false;
+                } else {
+                    // Altrimenti, ci prepariamo a chiedere il blocco successivo
+                    currentSkip += CHUNK_LIMIT;
+                }
             }
+
+            // Una volta finito il ciclo, salviamo l'intero array nello stato
+            setIps(allFetchedIps);
         } catch (err: any) {
             setError(`Network error while fetching data: ${err.message || String(err)}`);
         } finally {
@@ -262,28 +290,49 @@ const ManualWhitelist: React.FC = () => {
         setIsLoading(true);
         let hasErrors = false;
 
-        for (const key of selectedKeys) {
+        // Dividiamo le chiavi selezionate in chunk di 100 elementi
+        // per mantenere la query nell'URL estremamente compatta e sicura
+        const CHUNK_SIZE = 100;
+
+        for (let i = 0; i < selectedKeys.length; i += CHUNK_SIZE) {
+            const keysChunk = selectedKeys.slice(i, i + CHUNK_SIZE);
+
+            // Costruiamo la query JSON del KV Store usando l'operatore $in
+            const queryJson = JSON.stringify({
+                _key: {
+                    $in: keysChunk,
+                },
+            });
+
             try {
-                const response = await splunkFetch(`${KV_STORE_URL}/${key}`, {
-                    method: 'DELETE',
-                });
+                // Eseguiamo un singolo DELETE passandogli il parametro query codificato nell'URL
+                const response = await splunkFetch(
+                    `${KV_STORE_URL}?query=${encodeURIComponent(queryJson)}`,
+                    {
+                        method: 'DELETE',
+                    },
+                );
+
                 if (!response.ok) {
                     hasErrors = true;
-                    console.error(`Failed to delete key: ${key}`);
+                    console.error(`Failed to batch delete chunk starting at index ${i}`);
                 }
             } catch (err) {
                 hasErrors = true;
-                console.error(`Network error on delete for key: ${key}`, err);
+                console.error(
+                    `Network error on batch delete for chunk starting at index ${i}:`,
+                    err,
+                );
             }
         }
 
         if (hasErrors) {
             setError(
-                'Some IPs could not be deleted successfully. Please check the logs or try again.',
+                'Some selected items could not be deleted successfully. Check console logs for details.',
             );
         }
 
-        setSelectedKeys([]);
+        setSelectedKeys([]); // Svuotiamo la selezione al termine
         await fetchIps();
     };
 
@@ -319,7 +368,7 @@ const ManualWhitelist: React.FC = () => {
             return;
         }
 
-        const now = new Date().toISOString(); // Timestamp uguale per tutto il batch
+        const now = new Date().toISOString();
 
         const parsedData = lines.map((line) => {
             const parts = line.split(',');
@@ -327,7 +376,7 @@ const ManualWhitelist: React.FC = () => {
                 ip: parts[0]?.trim() || '',
                 user: parts[1]?.trim() || newUser.trim() || 'Unknown',
                 reason: parts[2]?.trim() || newReason.trim() || 'Bulk upload',
-                timestamp: now, // Aggiunta del timestamp
+                timestamp: now,
             };
         });
 
@@ -353,31 +402,42 @@ const ManualWhitelist: React.FC = () => {
 
         if (uniqueParsedData.length === 0) {
             setError(
-                'All the IPs in this file are already present in the whitelist. No new IPs were added.',
+                'All the IPs in this file are already present in the blacklist. No new IPs were added.',
             );
             setIsLoading(false);
             return;
         }
 
+        const CHUNK_SIZE = 1000; // Splunk gestisce 1000 record in batch senza problemi
         let hasErrors = false;
-        for (const entry of uniqueParsedData) {
+
+        // Dividiamo l'array gigante in blocchi da CHUNK_SIZE
+        for (let i = 0; i < uniqueParsedData.length; i += CHUNK_SIZE) {
+            const chunk = uniqueParsedData.slice(i, i + CHUNK_SIZE);
+
             try {
-                const response = await splunkFetch(KV_STORE_URL, {
+                const response = await splunkFetch(`${KV_STORE_URL}/batch_save`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(entry),
+                    body: JSON.stringify(chunk),
                 });
+
                 if (!response.ok) {
                     hasErrors = true;
+                    console.error(`Failed to save chunk starting at index ${i}`);
                 }
-            } catch (err) {
+            } catch (err: any) {
                 hasErrors = true;
+                console.error(`Network error on chunk starting at index ${i}:`, err);
             }
         }
 
         if (hasErrors) {
-            setError('Some IPs were not saved successfully. Check the data or console logs.');
+            setError(
+                'Some batches were not saved successfully. Check the console logs for details.',
+            );
         }
+
         await fetchIps();
     };
 
