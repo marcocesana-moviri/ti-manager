@@ -760,15 +760,16 @@ def _process_lists(
             log.events_ingested(logger, input_name, sourcetype, len(added_ips) + len(removed_ips), index)
 
             logger.info(f"{LOG_INFO_TAG} [KVSTORE PUSH] Changes pushed. Triggering remote CSV export via SPL...")
-            update_remote_csv_lookup(
-                logger, 
-                splunk_username, 
-                splunk_password, 
-                search_head, 
-                search_head_port, 
-                app_name, 
-                master_threatlist_collection
-            )
+            if added_ips or removed_ips:
+                update_remote_csv_lookup(
+                    logger, 
+                    splunk_username, 
+                    splunk_password, 
+                    search_head, 
+                    search_head_port, 
+                    app_name, 
+                    master_threatlist_collection
+                )
             logger.info(f"{LOG_INFO_TAG} [SYNC SUCCESS] Synchronization cycle completed successfully.")
 
         except Exception as e:
