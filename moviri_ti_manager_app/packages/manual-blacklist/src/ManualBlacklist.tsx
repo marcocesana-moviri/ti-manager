@@ -74,6 +74,23 @@ const ManualBlacklist: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
+        const fetchCurrentUser = async () => {
+            try {
+                // Chiamata all'API di Splunk per ottenere il contesto dell'utente loggato
+                const res = await splunkFetch(
+                    `/${locale}/splunkd/__raw/services/authentication/current-context?output_mode=json`,
+                );
+                if (res.ok) {
+                    const data = await res.json();
+                    const username = data?.entry?.[0]?.content?.username || 'Unknown';
+                    setNewUser(username);
+                }
+            } catch (err) {
+                console.error('Unable to get current user:', err);
+            }
+        };
+
+        fetchCurrentUser();
         fetchIps();
     }, []);
 
@@ -458,7 +475,7 @@ const ManualBlacklist: React.FC = () => {
                     <Text
                         value={newUser}
                         onChange={(e, { value }: { value: string }) => setNewUser(value)}
-                        placeholder="User (Optional)"
+                        disabled
                         style={{ width: '150px' }}
                     />
                     <Text
