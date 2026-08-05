@@ -5,6 +5,7 @@ import Table from '@splunk/react-ui/Table';
 import Select from '@splunk/react-ui/Select';
 import Paginator from '@splunk/react-ui/Paginator';
 import Heading from '@splunk/react-ui/Heading';
+import WaitSpinner from '@splunk/react-ui/WaitSpinner';
 
 import { defaultFetchInit } from '@splunk/splunk-utils/fetch';
 
@@ -60,6 +61,7 @@ const ManualWhitelist: React.FC = () => {
 
     // --- UI States ---
     const [isLoading, setIsLoading] = useState<boolean>(false);
+    const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
     // --- Search, Pagination, Sort & Selection States ---
@@ -143,6 +145,7 @@ const ManualWhitelist: React.FC = () => {
             setError(`Network error while fetching data: ${err.message || String(err)}`);
         } finally {
             setIsLoading(false);
+            setIsInitialLoad(false);
         }
     };
 
@@ -402,7 +405,7 @@ const ManualWhitelist: React.FC = () => {
 
         if (uniqueParsedData.length === 0) {
             setError(
-                'All the IPs in this file are already present in the blacklist. No new IPs were added.',
+                'All the IPs in this file are already present in the whitelist. No new IPs were added.',
             );
             setIsLoading(false);
             return;
@@ -470,278 +473,338 @@ const ManualWhitelist: React.FC = () => {
 
     return (
         <StyledContainer>
-            <StyledGreeting data-testid="greeting" style={{ marginBottom: '20px' }}>
-                Threat Intelligence IP Whitelist
-            </StyledGreeting>
-
-            {error && (
+            {/* --- LOADING SCREEN INIZIALE --- */}
+            {isInitialLoad ? (
                 <div
                     style={{
-                        backgroundColor: '#fcdcdc',
-                        color: '#d30909',
-                        padding: '12px',
-                        borderRadius: '4px',
-                        marginBottom: '20px',
-                        border: '1px solid #d30909',
-                        fontSize: '14px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        height: '60vh',
                     }}
                 >
-                    <strong>Error:</strong> {error}
-                </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '30px' }}>
-                <div style={kpiCardStyle}>
-                    <div style={kpiTitleStyle}>Total Whitelisted IPs</div>
-                    <div style={kpiValueStyle}>{totalIps}</div>
-                </div>
-                <div style={kpiCardStyle}>
-                    <div style={kpiTitleStyle}>Unique Users</div>
-                    <div style={kpiValueStyle}>{uniqueUsersCount}</div>
-                </div>
-                <div style={kpiCardStyle}>
-                    <div style={kpiTitleStyle}>Top Submitter</div>
-                    <div style={{ ...kpiValueStyle, fontSize: '22px' }}>
-                        {topUser}{' '}
-                        <span style={{ fontSize: '14px', fontWeight: 'normal', color: '#656d76' }}>
-                            ({topUserCount} IPs)
-                        </span>
+                    <WaitSpinner size="large" />
+                    <Heading level={3} style={{ marginTop: '25px', color: '#656d76' }}>
+                        Loading Manual Whitelist...
+                    </Heading>
+                    <div style={{ color: '#8c959f', marginTop: '10px' }}>
+                        Fetching Whitelist IPs from KV Store. This might take a moment.
                     </div>
                 </div>
-            </div>
+            ) : (
+                <>
+                    <StyledGreeting data-testid="greeting" style={{ marginBottom: '20px' }}>
+                        Threat Intelligence IP Whitelist
+                    </StyledGreeting>
 
-            <div
-                style={{
-                    backgroundColor: '#f8f9fa',
-                    padding: '20px',
-                    borderRadius: '8px',
-                    border: '1px solid #e1e6eb',
-                    marginBottom: '30px',
-                }}
-            >
-                <Heading level={4} style={{ marginTop: 0, marginBottom: '15px' }}>
-                    Add to Whitelist
-                </Heading>
-                <div
-                    style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}
-                >
-                    <Text
-                        value={newIp}
-                        onChange={(e, { value }: { value: string }) => setNewIp(value)}
-                        placeholder="IP (e.g. 192.168.1.0/24)"
-                        error={!isFormatValid || isDuplicate}
-                        style={{ width: '220px' }}
-                    />
-                    <Text
-                        value={newUser}
-                        onChange={(e, { value }: { value: string }) => setNewUser(value)}
-                        disabled
-                        style={{ width: '150px' }}
-                    />
-                    <Text
-                        value={newReason}
-                        onChange={(e, { value }: { value: string }) => setNewReason(value)}
-                        placeholder="Reason (Optional)"
-                        style={{ width: '250px' }}
-                    />
-                    <Button
-                        label="Add Single IP"
-                        appearance="primary"
-                        onClick={handleAddIp}
-                        disabled={isInputEmpty || !isFormatValid || isDuplicate || isLoading}
-                    />
-
-                    <div
-                        style={{ borderLeft: '1px solid #ccc', height: '30px', margin: '0 10px' }}
-                    ></div>
-
-                    <input
-                        type="file"
-                        accept=".txt"
-                        ref={fileInputRef}
-                        style={{ display: 'none' }}
-                        onChange={handleFileChange}
-                    />
-
-                    <Button
-                        label="Bulk Upload (TXT)"
-                        appearance="secondary"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isLoading}
-                    />
-                </div>
-
-                {!isFormatValid && (
-                    <div style={{ color: '#d30909', fontSize: '12px', marginTop: '8px' }}>
-                        Invalid CIDR format. Ensure you provide an IP and a subnet mask (e.g.,
-                        192.168.1.0/24).
-                    </div>
-                )}
-                {isFormatValid && isDuplicate && (
-                    <div
-                        style={{
-                            color: '#d30909',
-                            fontSize: '12px',
-                            fontWeight: 'bold',
-                            marginTop: '8px',
-                        }}
-                    >
-                        This IP is already in the whitelist.
-                    </div>
-                )}
-            </div>
-
-            <div
-                style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '15px',
-                }}
-            >
-                <Text
-                    value={searchQuery}
-                    onChange={(e, { value }: { value: string }) => setSearchQuery(value)}
-                    placeholder="Search by IP, User, or Reason..."
-                    canClear
-                    style={{ width: '350px' }}
-                />
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                    {selectedKeys.length > 0 && (
-                        <Button
-                            label={`Delete Selected (${selectedKeys.length})`}
-                            appearance="destructive"
-                            onClick={handleBulkRemove}
-                            disabled={isLoading}
-                        />
+                    {error && (
+                        <div
+                            style={{
+                                backgroundColor: '#fcdcdc',
+                                color: '#d30909',
+                                padding: '12px',
+                                borderRadius: '4px',
+                                marginBottom: '20px',
+                                border: '1px solid #d30909',
+                                fontSize: '14px',
+                            }}
+                        >
+                            <strong>Error:</strong> {error}
+                        </div>
                     )}
 
-                    <div style={{ borderLeft: '1px solid #ccc', height: '20px' }}></div>
-
-                    <span style={{ fontSize: '14px', color: '#3C444D', fontWeight: 500 }}>
-                        Rows per page:
-                    </span>
-                    <Select
-                        value={pageSize}
-                        onChange={(e: any, data: any) => setPageSize(data.value)}
-                        style={{ width: '80px' }}
+                    <div
+                        style={{
+                            display: 'flex',
+                            gap: '20px',
+                            flexWrap: 'wrap',
+                            marginBottom: '30px',
+                        }}
                     >
-                        <Select.Option label="5" value={5} />
-                        <Select.Option label="10" value={10} />
-                        <Select.Option label="25" value={25} />
-                        <Select.Option label="50" value={50} />
-                    </Select>
-                </div>
-            </div>
-
-            <div style={{ border: '1px solid #e1e6eb', borderRadius: '8px', overflow: 'hidden' }}>
-                <Table stripeRows>
-                    <Table.Head>
-                        <Table.HeadCell style={{ width: '40px', textAlign: 'center' }}>
-                            <input
-                                type="checkbox"
-                                checked={allPageSelected}
-                                onChange={handleToggleAll}
-                                disabled={paginatedIps.length === 0}
-                                style={{ cursor: 'pointer', width: '16px', height: '16px' }}
-                                title="Select all on this page"
-                            />
-                        </Table.HeadCell>
-                        <Table.HeadCell
-                            onSort={handleSort}
-                            sortKey="ip"
-                            sortDir={sortKey === 'ip' ? sortDir : 'none'}
-                        >
-                            IP Address (CIDR)
-                        </Table.HeadCell>
-                        <Table.HeadCell
-                            onSort={handleSort}
-                            sortKey="user"
-                            sortDir={sortKey === 'user' ? sortDir : 'none'}
-                        >
-                            Submitted By
-                        </Table.HeadCell>
-                        <Table.HeadCell
-                            onSort={handleSort}
-                            sortKey="reason"
-                            sortDir={sortKey === 'reason' ? sortDir : 'none'}
-                        >
-                            Reason
-                        </Table.HeadCell>
-                        <Table.HeadCell
-                            onSort={handleSort}
-                            sortKey="timestamp"
-                            sortDir={sortKey === 'timestamp' ? sortDir : 'none'}
-                        >
-                            Added On
-                        </Table.HeadCell>
-                        <Table.HeadCell style={{ width: '120px' }}>Actions</Table.HeadCell>
-                    </Table.Head>
-                    <Table.Body>
-                        {paginatedIps.length === 0 ? (
-                            <Table.Row>
-                                <Table.Cell
-                                    colSpan={6}
+                        <div style={kpiCardStyle}>
+                            <div style={kpiTitleStyle}>Total Whitelisted IPs</div>
+                            <div style={kpiValueStyle}>{totalIps}</div>
+                        </div>
+                        <div style={kpiCardStyle}>
+                            <div style={kpiTitleStyle}>Unique Users</div>
+                            <div style={kpiValueStyle}>{uniqueUsersCount}</div>
+                        </div>
+                        <div style={kpiCardStyle}>
+                            <div style={kpiTitleStyle}>Top Submitter</div>
+                            <div style={{ ...kpiValueStyle, fontSize: '22px' }}>
+                                {topUser}{' '}
+                                <span
                                     style={{
-                                        textAlign: 'center',
-                                        padding: '30px',
+                                        fontSize: '14px',
+                                        fontWeight: 'normal',
                                         color: '#656d76',
                                     }}
                                 >
-                                    {isLoading
-                                        ? 'Loading data...'
-                                        : searchQuery
-                                          ? 'No IPs match your search.'
-                                          : 'No IPs found in the whitelist.'}
-                                </Table.Cell>
-                            </Table.Row>
-                        ) : (
-                            paginatedIps.map((row) => (
-                                <Table.Row key={row._key}>
-                                    <Table.Cell style={{ textAlign: 'center' }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedKeys.includes(row._key)}
-                                            onChange={() => handleToggleRow(row._key)}
-                                            style={{
-                                                cursor: 'pointer',
-                                                width: '16px',
-                                                height: '16px',
-                                            }}
-                                        />
-                                    </Table.Cell>
-                                    <Table.Cell
-                                        style={{ fontFamily: 'monospace', fontSize: '14px' }}
-                                    >
-                                        {row.ip}
-                                    </Table.Cell>
-                                    <Table.Cell>{row.user || 'Unknown'}</Table.Cell>
-                                    <Table.Cell>{row.reason || '-'}</Table.Cell>
-                                    <Table.Cell>{formatTimestamp(row.timestamp)}</Table.Cell>
-                                    <Table.Cell>
-                                        <Button
-                                            label="Remove"
-                                            appearance="destructive"
-                                            onClick={() => handleRemoveIp(row._key)}
-                                            disabled={isLoading}
-                                        />
-                                    </Table.Cell>
-                                </Table.Row>
-                            ))
-                        )}
-                    </Table.Body>
-                </Table>
-            </div>
+                                    ({topUserCount} IPs)
+                                </span>
+                            </div>
+                        </div>
+                    </div>
 
-            {totalPages > 1 && (
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
-                    <Paginator
-                        current={currentPage}
-                        totalPages={totalPages}
-                        onChange={(e, { page }: { page: number }) => setCurrentPage(page)}
-                    />
-                </div>
+                    <div
+                        style={{
+                            backgroundColor: '#f8f9fa',
+                            padding: '20px',
+                            borderRadius: '8px',
+                            border: '1px solid #e1e6eb',
+                            marginBottom: '30px',
+                        }}
+                    >
+                        <Heading level={4} style={{ marginTop: 0, marginBottom: '15px' }}>
+                            Add to Whitelist
+                        </Heading>
+                        <div
+                            style={{
+                                display: 'flex',
+                                gap: '10px',
+                                alignItems: 'center',
+                                flexWrap: 'wrap',
+                            }}
+                        >
+                            <Text
+                                value={newIp}
+                                onChange={(e, { value }: { value: string }) => setNewIp(value)}
+                                placeholder="IP (e.g. 192.168.1.0/24)"
+                                error={!isFormatValid || isDuplicate}
+                                style={{ width: '220px' }}
+                            />
+                            <Text
+                                value={newUser}
+                                onChange={(e, { value }: { value: string }) => setNewUser(value)}
+                                disabled
+                                style={{ width: '150px' }}
+                            />
+                            <Text
+                                value={newReason}
+                                onChange={(e, { value }: { value: string }) => setNewReason(value)}
+                                placeholder="Reason (Optional)"
+                                style={{ width: '250px' }}
+                            />
+                            <Button
+                                label="Add Single IP"
+                                appearance="primary"
+                                onClick={handleAddIp}
+                                disabled={
+                                    isInputEmpty || !isFormatValid || isDuplicate || isLoading
+                                }
+                            />
+
+                            <div
+                                style={{
+                                    borderLeft: '1px solid #ccc',
+                                    height: '30px',
+                                    margin: '0 10px',
+                                }}
+                            ></div>
+
+                            <input
+                                type="file"
+                                accept=".txt"
+                                ref={fileInputRef}
+                                style={{ display: 'none' }}
+                                onChange={handleFileChange}
+                            />
+
+                            <Button
+                                label="Bulk Upload (TXT)"
+                                appearance="secondary"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={isLoading}
+                            />
+                        </div>
+
+                        {!isFormatValid && (
+                            <div style={{ color: '#d30909', fontSize: '12px', marginTop: '8px' }}>
+                                Invalid CIDR format. Ensure you provide an IP and a subnet mask
+                                (e.g., 192.168.1.0/24).
+                            </div>
+                        )}
+                        {isFormatValid && isDuplicate && (
+                            <div
+                                style={{
+                                    color: '#d30909',
+                                    fontSize: '12px',
+                                    fontWeight: 'bold',
+                                    marginTop: '8px',
+                                }}
+                            >
+                                This IP is already in the whitelist.
+                            </div>
+                        )}
+                    </div>
+
+                    <div
+                        style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: '15px',
+                        }}
+                    >
+                        <Text
+                            value={searchQuery}
+                            onChange={(e, { value }: { value: string }) => setSearchQuery(value)}
+                            placeholder="Search by IP, User, or Reason..."
+                            canClear
+                            style={{ width: '350px' }}
+                        />
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                            {selectedKeys.length > 0 && (
+                                <Button
+                                    label={`Delete Selected (${selectedKeys.length})`}
+                                    appearance="destructive"
+                                    onClick={handleBulkRemove}
+                                    disabled={isLoading}
+                                />
+                            )}
+
+                            <div style={{ borderLeft: '1px solid #ccc', height: '20px' }}></div>
+
+                            <span style={{ fontSize: '14px', color: '#3C444D', fontWeight: 500 }}>
+                                Rows per page:
+                            </span>
+                            <Select
+                                value={pageSize}
+                                onChange={(e: any, data: any) => setPageSize(data.value)}
+                                style={{ width: '80px' }}
+                            >
+                                <Select.Option label="5" value={5} />
+                                <Select.Option label="10" value={10} />
+                                <Select.Option label="25" value={25} />
+                                <Select.Option label="50" value={50} />
+                            </Select>
+                        </div>
+                    </div>
+
+                    <div
+                        style={{
+                            border: '1px solid #e1e6eb',
+                            borderRadius: '8px',
+                            overflow: 'hidden',
+                        }}
+                    >
+                        <Table stripeRows>
+                            <Table.Head>
+                                <Table.HeadCell style={{ width: '40px', textAlign: 'center' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={allPageSelected}
+                                        onChange={handleToggleAll}
+                                        disabled={paginatedIps.length === 0}
+                                        style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                                        title="Select all on this page"
+                                    />
+                                </Table.HeadCell>
+                                <Table.HeadCell
+                                    onSort={handleSort}
+                                    sortKey="ip"
+                                    sortDir={sortKey === 'ip' ? sortDir : 'none'}
+                                >
+                                    IP Address (CIDR)
+                                </Table.HeadCell>
+                                <Table.HeadCell
+                                    onSort={handleSort}
+                                    sortKey="user"
+                                    sortDir={sortKey === 'user' ? sortDir : 'none'}
+                                >
+                                    Submitted By
+                                </Table.HeadCell>
+                                <Table.HeadCell
+                                    onSort={handleSort}
+                                    sortKey="reason"
+                                    sortDir={sortKey === 'reason' ? sortDir : 'none'}
+                                >
+                                    Reason
+                                </Table.HeadCell>
+                                <Table.HeadCell
+                                    onSort={handleSort}
+                                    sortKey="timestamp"
+                                    sortDir={sortKey === 'timestamp' ? sortDir : 'none'}
+                                >
+                                    Added On
+                                </Table.HeadCell>
+                                <Table.HeadCell style={{ width: '120px' }}>Actions</Table.HeadCell>
+                            </Table.Head>
+                            <Table.Body>
+                                {paginatedIps.length === 0 ? (
+                                    <Table.Row>
+                                        <Table.Cell
+                                            colSpan={6}
+                                            style={{
+                                                textAlign: 'center',
+                                                padding: '30px',
+                                                color: '#656d76',
+                                            }}
+                                        >
+                                            {isLoading
+                                                ? 'Loading data...'
+                                                : searchQuery
+                                                  ? 'No IPs match your search.'
+                                                  : 'No IPs found in the whitelist.'}
+                                        </Table.Cell>
+                                    </Table.Row>
+                                ) : (
+                                    paginatedIps.map((row) => (
+                                        <Table.Row key={row._key}>
+                                            <Table.Cell style={{ textAlign: 'center' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedKeys.includes(row._key)}
+                                                    onChange={() => handleToggleRow(row._key)}
+                                                    style={{
+                                                        cursor: 'pointer',
+                                                        width: '16px',
+                                                        height: '16px',
+                                                    }}
+                                                />
+                                            </Table.Cell>
+                                            <Table.Cell
+                                                style={{
+                                                    fontFamily: 'monospace',
+                                                    fontSize: '14px',
+                                                }}
+                                            >
+                                                {row.ip}
+                                            </Table.Cell>
+                                            <Table.Cell>{row.user || 'Unknown'}</Table.Cell>
+                                            <Table.Cell>{row.reason || '-'}</Table.Cell>
+                                            <Table.Cell>
+                                                {formatTimestamp(row.timestamp)}
+                                            </Table.Cell>
+                                            <Table.Cell>
+                                                <Button
+                                                    label="Remove"
+                                                    appearance="destructive"
+                                                    onClick={() => handleRemoveIp(row._key)}
+                                                    disabled={isLoading}
+                                                />
+                                            </Table.Cell>
+                                        </Table.Row>
+                                    ))
+                                )}
+                            </Table.Body>
+                        </Table>
+                    </div>
+
+                    {totalPages > 1 && (
+                        <div
+                            style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}
+                        >
+                            <Paginator
+                                current={currentPage}
+                                totalPages={totalPages}
+                                onChange={(e, { page }: { page: number }) => setCurrentPage(page)}
+                            />
+                        </div>
+                    )}
+                </>
             )}
         </StyledContainer>
     );
