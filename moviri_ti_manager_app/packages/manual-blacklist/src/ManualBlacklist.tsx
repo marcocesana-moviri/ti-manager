@@ -497,14 +497,14 @@ const ManualBlacklist: React.FC = () => {
 
                     <input
                         type="file"
-                        accept=".txt,.csv"
+                        accept=".txt"
                         ref={fileInputRef}
                         style={{ display: 'none' }}
                         onChange={handleFileChange}
                     />
 
                     <Button
-                        label="Bulk Upload (CSV/TXT)"
+                        label="Bulk Upload (TXT)"
                         appearance="secondary"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isLoading}
