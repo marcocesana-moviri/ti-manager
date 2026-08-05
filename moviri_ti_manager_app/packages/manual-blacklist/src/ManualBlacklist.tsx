@@ -10,7 +10,7 @@ import { defaultFetchInit } from '@splunk/splunk-utils/fetch';
 
 import { StyledContainer, StyledGreeting } from './ManualBlacklistStyles';
 
-const APP_NAME = 'moviri-ti-manager-app';
+const APP_NAME = 'moviri_ti_manager_app';
 const COLLECTION_NAME = 'manual_blacklist';
 
 const locale = window.location.pathname.split('/')[1] || 'en-US';
