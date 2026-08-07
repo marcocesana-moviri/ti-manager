@@ -216,8 +216,11 @@ da_package() {
 
     print_info "Creating package ${DA_PACKAGE_NAME} in ${DELIVERABLES_DIR}..."
     
-    # Compress the content of the stage folder into a tar.gz file
-    tar -czf "${DELIVERABLES_DIR}/${DA_PACKAGE_NAME}" -C "${DA_STAGE_DIR}" .
+    local FOLDER_NAME="${DA_PACKAGE_NAME%.tar.gz}"
+
+    tar -czf "${DELIVERABLES_DIR}/${DA_PACKAGE_NAME}" \
+        --transform="s|^./|${FOLDER_NAME}/|" \
+        -C "${DA_STAGE_DIR}" .
 
     print_info "DA package completed."
 }
