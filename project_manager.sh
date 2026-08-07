@@ -31,9 +31,11 @@ PYTHON_VERSION="3.9.20"
 PYTHON_BIN=""
 
 DA_NAME="moviri_ti_manager_app"
+DA_VERSION="1.0.0"
 DA_APP_DIR="${PROJECT_ROOT}/${DA_NAME}"
 DA_STAGE_DIR="${DA_APP_DIR}/packages/moviri-ti-manager-app/stage"
-DA_PACKAGE_NAME="moviri_ti_manager_app.tar.gz"
+DA_PACKAGE_NAME="${DA_NAME}-${DA_VERSION}.tar.gz"
+DA_APP_CONF="${DA_APP_DIR}/packages/moviri-ti-manager-app/src/main/resources/splunk/default/app.conf"
 
 ########################################
 # LOGGING
@@ -170,6 +172,14 @@ da_build() {
         exit 1
     fi
 
+    if [[ -f "${DA_APP_CONF}" ]]; then
+        print_info "Injecting DA_VERSION ${DA_VERSION} into ${DA_APP_CONF} ([id] and [launcher] stanzas)..."
+        sed -i -E "/^\[(id|launcher)\]/,/^\[/ s/^(version[[:space:]]*=[[:space:]]*).*/\1${DA_VERSION}/" "${DA_APP_CONF}"
+    else
+        print_warn "app.conf not found at ${DA_APP_CONF}, skipping version injection."
+    fi
+    # --------------------------------------------
+
     cd "${DA_APP_DIR}"
     
     print_info "Running yarn..."
@@ -216,7 +226,7 @@ da_package() {
 
     print_info "Creating package ${DA_PACKAGE_NAME} in ${DELIVERABLES_DIR}..."
     
-    local FOLDER_NAME="${DA_PACKAGE_NAME%.tar.gz}"
+    local FOLDER_NAME="${DA_NAME}"
 
     tar -czf "${DELIVERABLES_DIR}/${DA_PACKAGE_NAME}" \
         --transform="s|^./|${FOLDER_NAME}/|" \
