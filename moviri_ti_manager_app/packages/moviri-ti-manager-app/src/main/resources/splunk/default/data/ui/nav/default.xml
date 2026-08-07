@@ -1,4 +1,5 @@
 <nav>
   <view name="ManualBlacklist" default="true"/>
   <view name="ManualWhitelist"/>
+  <view name="ti_manager_-_monitor"/>
 </nav>
