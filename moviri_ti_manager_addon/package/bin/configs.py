@@ -2,7 +2,7 @@ import ipaddress
 
 ### GLOBAL CONFIGS ###
 ADDON_NAME = "moviri_ti_manager_addon"
-ADDON_VERSION = "0.0.1"
+ADDON_VERSION = "1.0.0"
 CONF_FILE_NAME = "moviri_ti_manager_addon_settings"
 CONF_FILE_BASE_NAME = f"{ADDON_NAME.lower()}"
 ACCOUNT_CONF_FILE_NAME = f"{CONF_FILE_BASE_NAME}_account"

@@ -17,7 +17,7 @@ REQUIREMENTS_DEV_FILE="${PROJECT_ROOT}/requirements-dev.txt"
 
 # TA Directories & Configuration
 TA_NAME="moviri_ti_manager_addon"
-TA_VERSION="0.0.1"
+TA_VERSION="1.0.0"
 TA_ROOT="${PROJECT_ROOT}/${TA_NAME}"
 TA_PACKAGE_DIR="${TA_ROOT}/package"
 TA_PACKAGE_BIN_DIR="${TA_PACKAGE_DIR}/bin"
@@ -29,6 +29,11 @@ TA_VERSION_VAR_NAME="ADDON_VERSION"
 # Python Runtime Configuration
 PYTHON_VERSION="3.9.20"
 PYTHON_BIN=""
+
+DA_NAME="moviri_ti_manager_app"
+DA_APP_DIR="${PROJECT_ROOT}/${DA_NAME}"
+DA_STAGE_DIR="${DA_APP_DIR}/packages/moviri-ti-manager-app/stage"
+DA_PACKAGE_NAME="moviri_ti_manager_app.tar.gz"
 
 ########################################
 # LOGGING
@@ -155,6 +160,29 @@ ta_build() {
     print_info "TA build completed."
 }
 
+da_build() {
+    print_info "Building DA (Data App)..."
+    
+    require_command yarn
+
+    if [[ ! -d "${DA_APP_DIR}" ]]; then
+        print_error "Directory ${DA_APP_DIR} doesn't exist."
+        exit 1
+    fi
+
+    cd "${DA_APP_DIR}"
+    
+    print_info "Running yarn..."
+    yarn
+    
+    print_info "Running yarn build..."
+    yarn build
+    
+    cd "${PROJECT_ROOT}"
+
+    print_info "DA build completed successfully."
+}
+
 ########################################
 # PACKAGE
 ########################################
@@ -176,6 +204,24 @@ ta_package() {
     print_info "TA package completed."
 }
 
+da_package() {
+    print_info "Packaging DA..."
+
+    if [[ ! -d "${DA_STAGE_DIR}" ]]; then
+        print_error "Directory stage ${DA_STAGE_DIR} doesn't exist. Make sure you have run the build."
+        exit 1
+    fi
+
+    mkdir -p "${DELIVERABLES_DIR}"
+
+    print_info "Creating package ${DA_PACKAGE_NAME} in ${DELIVERABLES_DIR}..."
+    
+    # Compress the content of the stage folder into a tar.gz file
+    tar -czf "${DELIVERABLES_DIR}/${DA_PACKAGE_NAME}" -C "${DA_STAGE_DIR}" .
+
+    print_info "DA package completed."
+}
+
 ########################################
 # FULL PIPELINE
 ########################################
@@ -183,6 +229,11 @@ ta_package() {
 ta_all() {
     ta_build
     ta_package
+}
+
+da_all() {
+    da_build
+    da_package
 }
 
 ########################################
@@ -237,6 +288,10 @@ Commands:
   ta-package                Package TA addon
   ta-all                    Run quality tests + build + package TA addon
 
+  da-build                  Run yarn && yarn build in moviri_ti_manager_app
+  da-package                Create tar.gz of the DA stage folder in deliverables/
+  da-all                    Run build + package for DA
+
   clean-venv                Remove virtual environment
   clean-output              Remove output content
   clean-deliverables        Remove deliverables content
@@ -283,6 +338,18 @@ main() {
 
         ta-all)
             ta_all
+            ;;
+
+        da-build)
+            da_build
+            ;;
+
+        da-package)
+            da_package
+            ;;
+
+        da-all)
+            da_all
             ;;
 
         clean-venv)
