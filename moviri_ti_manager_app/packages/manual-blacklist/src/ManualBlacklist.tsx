@@ -187,7 +187,7 @@ const ManualBlacklist: React.FC = () => {
             }
         });
         return Object.values(groups).sort(
-            (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
         );
     }, [ips]);
 
@@ -282,29 +282,7 @@ const ManualBlacklist: React.FC = () => {
         }
     };
 
-    const handleRemoveIp = async (key: string) => {
-        setError(null);
-        setIsLoading(true);
-        try {
-            const response = await splunkFetch(`${KV_STORE_URL}/${key}`, {
-                method: 'DELETE',
-            });
-
-            if (response.ok) {
-                setSelectedKeys((prev) => prev.filter((k) => k !== key));
-                await fetchIps();
-            } else {
-                const errorText = await response.text();
-                setError(`Failed to remove IP (${response.status}): ${errorText}`);
-                setIsLoading(false);
-            }
-        } catch (err: any) {
-            setError(`Network error while removing: ${err.message || String(err)}`);
-            setIsLoading(false);
-        }
-    };
-
-    // Generic Batch Delete Function
+    // Generic Batch Delete Function (usato sia per le selezioni manuali che per le liste)
     const performBatchDelete = async (keysToRemove: string[]) => {
         let hasErrors = false;
         const CHUNK_SIZE = 100;
@@ -324,7 +302,10 @@ const ManualBlacklist: React.FC = () => {
                 }
             } catch (err) {
                 hasErrors = true;
-                console.error(`Network error on batch delete for chunk starting at index ${i}:`, err);
+                console.error(
+                    `Network error on batch delete for chunk starting at index ${i}:`,
+                    err,
+                );
             }
         }
         return hasErrors;
@@ -334,24 +315,29 @@ const ManualBlacklist: React.FC = () => {
         if (selectedKeys.length === 0) return;
         setError(null);
         setIsLoading(true);
-        
+
         const hasErrors = await performBatchDelete(selectedKeys);
         if (hasErrors) {
-            setError('Some selected items could not be deleted successfully. Check console logs for details.');
+            setError(
+                'Some selected items could not be deleted successfully. Check console logs for details.',
+            );
         }
 
         setSelectedKeys([]);
         await fetchIps();
     };
 
+    // Handler per rimuovere un'intera lista tramite bottone dedicato
     const handleRemoveList = async (keysToRemove: string[]) => {
         if (keysToRemove.length === 0) return;
         setError(null);
         setIsLoading(true);
-        
+
         const hasErrors = await performBatchDelete(keysToRemove);
         if (hasErrors) {
-            setError('Some items from the list could not be deleted successfully. Check console logs.');
+            setError(
+                'Some items from the list could not be deleted successfully. Check console logs.',
+            );
         }
 
         setSelectedKeys((prev) => prev.filter((k) => !keysToRemove.includes(k)));
@@ -383,7 +369,7 @@ const ManualBlacklist: React.FC = () => {
         const lines = text
             .split(/\r?\n/)
             .map((line) => line.trim())
-            .filter((line) => line.length > 0)[cite: 1];
+            .filter((line) => line.length > 0);
 
         if (lines.length === 0) {
             setError('The selected file is empty or contains no valid data.');
@@ -493,6 +479,34 @@ const ManualBlacklist: React.FC = () => {
 
     return (
         <StyledContainer>
+            {/* OVERLAY DI CARICAMENTO PER LE OPERAZIONI IN CORSO */}
+            {isLoading && !isInitialLoad && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        width: '100vw',
+                        height: '100vh',
+                        backgroundColor: 'rgba(255, 255, 255, 0.75)',
+                        zIndex: 9999,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                    }}
+                >
+                    <WaitSpinner size="large" />
+                    <Heading level={3} style={{ marginTop: '20px', color: '#1e252b' }}>
+                        Processing Operation...
+                    </Heading>
+                    <div style={{ color: '#656d76', marginTop: '10px', fontSize: '14px' }}>
+                        Please wait while the KV Store updates. This may take a few moments for
+                        large files.
+                    </div>
+                </div>
+            )}
+
             {isInitialLoad ? (
                 <div
                     style={{
@@ -624,14 +638,14 @@ const ManualBlacklist: React.FC = () => {
 
                             <input
                                 type="file"
-                                accept=".txt,.csv"
+                                accept=".txt"
                                 ref={fileInputRef}
                                 style={{ display: 'none' }}
                                 onChange={handleFileChange}
                             />
 
                             <Button
-                                label="Bulk Upload (CSV/TXT)"
+                                label="Bulk Upload (TXT)"
                                 appearance="secondary"
                                 onClick={() => fileInputRef.current?.click()}
                                 disabled={isLoading}
@@ -658,7 +672,7 @@ const ManualBlacklist: React.FC = () => {
                         )}
                     </div>
 
-                    {/* NUOVA SEZIONE: UPLOADED LISTS */}
+                    {/* SEZIONE: UPLOADED LISTS MANAGEMENT */}
                     {fileLists.length > 0 && (
                         <div style={{ marginBottom: '30px' }}>
                             <Heading level={4} style={{ marginTop: 0, marginBottom: '15px' }}>
@@ -677,15 +691,21 @@ const ManualBlacklist: React.FC = () => {
                                         <Table.HeadCell>Subnets Count</Table.HeadCell>
                                         <Table.HeadCell>Uploaded By</Table.HeadCell>
                                         <Table.HeadCell>Date</Table.HeadCell>
-                                        <Table.HeadCell style={{ width: '180px' }}>Actions</Table.HeadCell>
+                                        <Table.HeadCell style={{ width: '180px' }}>
+                                            Actions
+                                        </Table.HeadCell>
                                     </Table.Head>
                                     <Table.Body>
                                         {fileLists.map((list) => (
                                             <Table.Row key={list.filename}>
-                                                <Table.Cell style={{ fontWeight: 'bold' }}>{list.filename}</Table.Cell>
+                                                <Table.Cell style={{ fontWeight: 'bold' }}>
+                                                    {list.filename}
+                                                </Table.Cell>
                                                 <Table.Cell>{list.count}</Table.Cell>
                                                 <Table.Cell>{list.user}</Table.Cell>
-                                                <Table.Cell>{formatTimestamp(list.timestamp)}</Table.Cell>
+                                                <Table.Cell>
+                                                    {formatTimestamp(list.timestamp)}
+                                                </Table.Cell>
                                                 <Table.Cell>
                                                     <Button
                                                         label="Remove Entire List"
@@ -804,13 +824,12 @@ const ManualBlacklist: React.FC = () => {
                                 >
                                     Added On
                                 </Table.HeadCell>
-                                <Table.HeadCell style={{ width: '120px' }}>Actions</Table.HeadCell>
                             </Table.Head>
                             <Table.Body>
                                 {paginatedIps.length === 0 ? (
                                     <Table.Row>
                                         <Table.Cell
-                                            colSpan={7}
+                                            colSpan={6}
                                             style={{
                                                 textAlign: 'center',
                                                 padding: '30px',
@@ -847,19 +866,13 @@ const ManualBlacklist: React.FC = () => {
                                             >
                                                 {row.ip}
                                             </Table.Cell>
-                                            <Table.Cell>{row.filename || 'Manual Entry'}</Table.Cell>
+                                            <Table.Cell>
+                                                {row.filename || 'Manual Entry'}
+                                            </Table.Cell>
                                             <Table.Cell>{row.user || 'Unknown'}</Table.Cell>
                                             <Table.Cell>{row.reason || '-'}</Table.Cell>
                                             <Table.Cell>
                                                 {formatTimestamp(row.timestamp)}
-                                            </Table.Cell>
-                                            <Table.Cell>
-                                                <Button
-                                                    label="Remove"
-                                                    appearance="destructive"
-                                                    onClick={() => handleRemoveIp(row._key)}
-                                                    disabled={isLoading}
-                                                />
                                             </Table.Cell>
                                         </Table.Row>
                                     ))

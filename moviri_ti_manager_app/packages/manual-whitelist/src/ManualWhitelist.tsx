@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Button from '@splunk/react-ui/Button';
 import Text from '@splunk/react-ui/Text';
 import Table from '@splunk/react-ui/Table';
@@ -23,6 +23,15 @@ interface IPRow {
     user: string;
     reason: string;
     timestamp: string;
+    filename?: string;
+}
+
+interface FileListGroup {
+    filename: string;
+    count: number;
+    user: string;
+    timestamp: string;
+    keys: string[];
 }
 
 const splunkFetch = (url: string, options: RequestInit = {}) => {
@@ -44,7 +53,6 @@ const isValidCIDR = (cidr: string): boolean => {
     return cidrRegex.test(cidr);
 };
 
-// Helper per formattare il timestamp in una data leggibile (es: 03/08/2026, 17:02:00)
 const formatTimestamp = (isoString?: string) => {
     if (!isoString) return '-';
     const date = new Date(isoString);
@@ -54,17 +62,14 @@ const formatTimestamp = (isoString?: string) => {
 const ManualWhitelist: React.FC = () => {
     const [ips, setIps] = useState<IPRow[]>([]);
 
-    // --- Form States ---
     const [newIp, setNewIp] = useState<string>('');
     const [newUser, setNewUser] = useState<string>('');
     const [newReason, setNewReason] = useState<string>('');
 
-    // --- UI States ---
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
-    // --- Search, Pagination, Sort & Selection States ---
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [currentPage, setCurrentPage] = useState<number>(1);
     const [pageSize, setPageSize] = useState<number>(10);
@@ -78,7 +83,6 @@ const ManualWhitelist: React.FC = () => {
     useEffect(() => {
         const fetchCurrentUser = async () => {
             try {
-                // Chiamata all'API di Splunk per ottenere il contesto dell'utente loggato
                 const res = await splunkFetch(
                     `/${locale}/splunkd/__raw/services/authentication/current-context?output_mode=json`,
                 );
@@ -108,10 +112,9 @@ const ManualWhitelist: React.FC = () => {
         try {
             let allFetchedIps: IPRow[] = [];
             let currentSkip = 0;
-            const CHUNK_LIMIT = 50000; // Usiamo il limite di sicurezza standard di Splunk
+            const CHUNK_LIMIT = 50000;
             let keepFetching = true;
 
-            // Continuiamo a chiedere dati finché Splunk non ci restituisce un blocco incompleto
             while (keepFetching) {
                 const response = await splunkFetch(
                     `${KV_STORE_URL}?limit=${CHUNK_LIMIT}&skip=${currentSkip}`,
@@ -125,21 +128,15 @@ const ManualWhitelist: React.FC = () => {
                 }
 
                 const chunk: IPRow[] = await response.json();
-
-                // Uniamo il nuovo blocco ai dati già scaricati
                 allFetchedIps = [...allFetchedIps, ...chunk];
 
-                // Se Splunk ci restituisce meno record di quelli che abbiamo chiesto,
-                // significa che abbiamo raggiunto la fine del database.
                 if (chunk.length < CHUNK_LIMIT) {
                     keepFetching = false;
                 } else {
-                    // Altrimenti, ci prepariamo a chiedere il blocco successivo
                     currentSkip += CHUNK_LIMIT;
                 }
             }
 
-            // Una volta finito il ciclo, salviamo l'intero array nello stato
             setIps(allFetchedIps);
         } catch (err: any) {
             setError(`Network error while fetching data: ${err.message || String(err)}`);
@@ -149,7 +146,7 @@ const ManualWhitelist: React.FC = () => {
         }
     };
 
-    // --- Metrics Calculation ---
+    // --- KPI & Grouping Computations ---
     const totalIps = ips.length;
     const uniqueUsersCount = new Set(ips.map((row) => row.user || 'Unknown')).size;
 
@@ -171,20 +168,42 @@ const ManualWhitelist: React.FC = () => {
         }
     }
 
-    // --- Derived Data Pipeline: Filter -> Sort -> Paginate ---
+    // Gruppo logico per i file caricati
+    const fileLists = useMemo(() => {
+        const groups: Record<string, FileListGroup> = {};
+        ips.forEach((row) => {
+            if (row.filename) {
+                if (!groups[row.filename]) {
+                    groups[row.filename] = {
+                        filename: row.filename,
+                        count: 0,
+                        user: row.user,
+                        timestamp: row.timestamp,
+                        keys: [],
+                    };
+                }
+                groups[row.filename].count += 1;
+                groups[row.filename].keys.push(row._key);
+            }
+        });
+        return Object.values(groups).sort(
+            (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+        );
+    }, [ips]);
+
+    // --- Filtering & Sorting ---
     const filteredIps = ips.filter((row) => {
         const query = searchQuery.toLowerCase();
         return (
             row.ip.toLowerCase().includes(query) ||
             (row.user && row.user.toLowerCase().includes(query)) ||
-            (row.reason && row.reason.toLowerCase().includes(query))
+            (row.reason && row.reason.toLowerCase().includes(query)) ||
+            (row.filename && row.filename.toLowerCase().includes(query))
         );
     });
 
     const sortedIps = [...filteredIps].sort((a, b) => {
         if (sortDir === 'none' || sortKey === 'none') return 0;
-
-        // I timestamp ISO sono ordinabili alfabeticamente in modo perfetto
         const valA = (a[sortKey] || '').toLowerCase();
         const valB = (b[sortKey] || '').toLowerCase();
 
@@ -196,7 +215,7 @@ const ManualWhitelist: React.FC = () => {
     const totalPages = Math.max(1, Math.ceil(sortedIps.length / pageSize));
     const paginatedIps = sortedIps.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-    // --- Selection Handlers ---
+    // --- Action Handlers ---
     const allPageSelected =
         paginatedIps.length > 0 && paginatedIps.every((row) => selectedKeys.includes(row._key));
 
@@ -216,7 +235,6 @@ const ManualWhitelist: React.FC = () => {
         );
     };
 
-    // --- Action Handlers ---
     const handleSort = (e: any, { sortKey: newSortKey }: any) => {
         if (sortKey === newSortKey) {
             setSortDir((prev) => (prev === 'asc' ? 'desc' : prev === 'desc' ? 'none' : 'asc'));
@@ -245,7 +263,7 @@ const ManualWhitelist: React.FC = () => {
                     ip: trimmedIp,
                     user: newUser.trim() || 'Unknown',
                     reason: newReason.trim() || 'No reason provided',
-                    timestamp: new Date().toISOString(), // Aggiunta del timestamp
+                    timestamp: new Date().toISOString(),
                 }),
             });
 
@@ -264,58 +282,20 @@ const ManualWhitelist: React.FC = () => {
         }
     };
 
-    const handleRemoveIp = async (key: string) => {
-        setError(null);
-        setIsLoading(true);
-        try {
-            const response = await splunkFetch(`${KV_STORE_URL}/${key}`, {
-                method: 'DELETE',
-            });
-
-            if (response.ok) {
-                setSelectedKeys((prev) => prev.filter((k) => k !== key));
-                await fetchIps();
-            } else {
-                const errorText = await response.text();
-                setError(`Failed to remove IP (${response.status}): ${errorText}`);
-                setIsLoading(false);
-            }
-        } catch (err: any) {
-            setError(`Network error while removing: ${err.message || String(err)}`);
-            setIsLoading(false);
-        }
-    };
-
-    const handleBulkRemove = async () => {
-        if (selectedKeys.length === 0) return;
-
-        setError(null);
-        setIsLoading(true);
+    // Generic Batch Delete Function (usato sia per le selezioni manuali che per le liste)
+    const performBatchDelete = async (keysToRemove: string[]) => {
         let hasErrors = false;
-
-        // Dividiamo le chiavi selezionate in chunk di 100 elementi
-        // per mantenere la query nell'URL estremamente compatta e sicura
         const CHUNK_SIZE = 100;
 
-        for (let i = 0; i < selectedKeys.length; i += CHUNK_SIZE) {
-            const keysChunk = selectedKeys.slice(i, i + CHUNK_SIZE);
-
-            // Costruiamo la query JSON del KV Store usando l'operatore $in
-            const queryJson = JSON.stringify({
-                _key: {
-                    $in: keysChunk,
-                },
-            });
+        for (let i = 0; i < keysToRemove.length; i += CHUNK_SIZE) {
+            const keysChunk = keysToRemove.slice(i, i + CHUNK_SIZE);
+            const queryJson = JSON.stringify({ _key: { $in: keysChunk } });
 
             try {
-                // Eseguiamo un singolo DELETE passandogli il parametro query codificato nell'URL
                 const response = await splunkFetch(
                     `${KV_STORE_URL}?query=${encodeURIComponent(queryJson)}`,
-                    {
-                        method: 'DELETE',
-                    },
+                    { method: 'DELETE' },
                 );
-
                 if (!response.ok) {
                     hasErrors = true;
                     console.error(`Failed to batch delete chunk starting at index ${i}`);
@@ -328,14 +308,39 @@ const ManualWhitelist: React.FC = () => {
                 );
             }
         }
+        return hasErrors;
+    };
 
+    const handleBulkRemove = async () => {
+        if (selectedKeys.length === 0) return;
+        setError(null);
+        setIsLoading(true);
+
+        const hasErrors = await performBatchDelete(selectedKeys);
         if (hasErrors) {
             setError(
                 'Some selected items could not be deleted successfully. Check console logs for details.',
             );
         }
 
-        setSelectedKeys([]); // Svuotiamo la selezione al termine
+        setSelectedKeys([]);
+        await fetchIps();
+    };
+
+    // Handler per rimuovere un'intera lista tramite bottone dedicato
+    const handleRemoveList = async (keysToRemove: string[]) => {
+        if (keysToRemove.length === 0) return;
+        setError(null);
+        setIsLoading(true);
+
+        const hasErrors = await performBatchDelete(keysToRemove);
+        if (hasErrors) {
+            setError(
+                'Some items from the list could not be deleted successfully. Check console logs.',
+            );
+        }
+
+        setSelectedKeys((prev) => prev.filter((k) => !keysToRemove.includes(k)));
         await fetchIps();
     };
 
@@ -343,11 +348,12 @@ const ManualWhitelist: React.FC = () => {
         const file = event.target.files?.[0];
         if (!file) return;
 
+        const fileName = file.name;
         const reader = new FileReader();
         reader.onload = async (e) => {
             const text = e.target?.result as string;
             if (text) {
-                await processBulkIps(text);
+                await processBulkIps(text, fileName);
             }
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
@@ -356,7 +362,7 @@ const ManualWhitelist: React.FC = () => {
         reader.readAsText(file);
     };
 
-    const processBulkIps = async (text: string) => {
+    const processBulkIps = async (text: string, fileName: string) => {
         setError(null);
         setIsLoading(true);
 
@@ -380,6 +386,7 @@ const ManualWhitelist: React.FC = () => {
                 user: parts[1]?.trim() || newUser.trim() || 'Unknown',
                 reason: parts[2]?.trim() || newReason.trim() || 'Bulk upload',
                 timestamp: now,
+                filename: fileName, // Aggiunto il nome del file al payload
             };
         });
 
@@ -411,10 +418,9 @@ const ManualWhitelist: React.FC = () => {
             return;
         }
 
-        const CHUNK_SIZE = 1000; // Splunk gestisce 1000 record in batch senza problemi
+        const CHUNK_SIZE = 1000;
         let hasErrors = false;
 
-        // Dividiamo l'array gigante in blocchi da CHUNK_SIZE
         for (let i = 0; i < uniqueParsedData.length; i += CHUNK_SIZE) {
             const chunk = uniqueParsedData.slice(i, i + CHUNK_SIZE);
 
@@ -473,7 +479,34 @@ const ManualWhitelist: React.FC = () => {
 
     return (
         <StyledContainer>
-            {/* --- LOADING SCREEN INIZIALE --- */}
+            {/* OVERLAY DI CARICAMENTO PER LE OPERAZIONI IN CORSO */}
+            {isLoading && !isInitialLoad && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        width: '100vw',
+                        height: '100vh',
+                        backgroundColor: 'rgba(255, 255, 255, 0.75)',
+                        zIndex: 9999,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                    }}
+                >
+                    <WaitSpinner size="large" />
+                    <Heading level={3} style={{ marginTop: '20px', color: '#1e252b' }}>
+                        Processing Operation...
+                    </Heading>
+                    <div style={{ color: '#656d76', marginTop: '10px', fontSize: '14px' }}>
+                        Please wait while the KV Store updates. This may take a few moments for
+                        large files.
+                    </div>
+                </div>
+            )}
+
             {isInitialLoad ? (
                 <div
                     style={{
@@ -639,6 +672,60 @@ const ManualWhitelist: React.FC = () => {
                         )}
                     </div>
 
+                    {/* SEZIONE: UPLOADED LISTS MANAGEMENT */}
+                    {fileLists.length > 0 && (
+                        <div style={{ marginBottom: '30px' }}>
+                            <Heading level={4} style={{ marginTop: 0, marginBottom: '15px' }}>
+                                Uploaded Lists Management
+                            </Heading>
+                            <div
+                                style={{
+                                    border: '1px solid #e1e6eb',
+                                    borderRadius: '8px',
+                                    overflow: 'hidden',
+                                }}
+                            >
+                                <Table stripeRows>
+                                    <Table.Head>
+                                        <Table.HeadCell>File Name</Table.HeadCell>
+                                        <Table.HeadCell>Subnets Count</Table.HeadCell>
+                                        <Table.HeadCell>Uploaded By</Table.HeadCell>
+                                        <Table.HeadCell>Date</Table.HeadCell>
+                                        <Table.HeadCell style={{ width: '180px' }}>
+                                            Actions
+                                        </Table.HeadCell>
+                                    </Table.Head>
+                                    <Table.Body>
+                                        {fileLists.map((list) => (
+                                            <Table.Row key={list.filename}>
+                                                <Table.Cell style={{ fontWeight: 'bold' }}>
+                                                    {list.filename}
+                                                </Table.Cell>
+                                                <Table.Cell>{list.count}</Table.Cell>
+                                                <Table.Cell>{list.user}</Table.Cell>
+                                                <Table.Cell>
+                                                    {formatTimestamp(list.timestamp)}
+                                                </Table.Cell>
+                                                <Table.Cell>
+                                                    <Button
+                                                        label="Remove Entire List"
+                                                        appearance="destructive"
+                                                        onClick={() => handleRemoveList(list.keys)}
+                                                        disabled={isLoading}
+                                                    />
+                                                </Table.Cell>
+                                            </Table.Row>
+                                        ))}
+                                    </Table.Body>
+                                </Table>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* SEZIONE: MAIN TABLE */}
+                    <Heading level={4} style={{ marginTop: 0, marginBottom: '15px' }}>
+                        All Whitelisted IPs
+                    </Heading>
                     <div
                         style={{
                             display: 'flex',
@@ -650,7 +737,7 @@ const ManualWhitelist: React.FC = () => {
                         <Text
                             value={searchQuery}
                             onChange={(e, { value }: { value: string }) => setSearchQuery(value)}
-                            placeholder="Search by IP, User, or Reason..."
+                            placeholder="Search by IP, User, File, or Reason..."
                             canClear
                             style={{ width: '350px' }}
                         />
@@ -711,6 +798,13 @@ const ManualWhitelist: React.FC = () => {
                                 </Table.HeadCell>
                                 <Table.HeadCell
                                     onSort={handleSort}
+                                    sortKey="filename"
+                                    sortDir={sortKey === 'filename' ? sortDir : 'none'}
+                                >
+                                    Source
+                                </Table.HeadCell>
+                                <Table.HeadCell
+                                    onSort={handleSort}
                                     sortKey="user"
                                     sortDir={sortKey === 'user' ? sortDir : 'none'}
                                 >
@@ -730,7 +824,6 @@ const ManualWhitelist: React.FC = () => {
                                 >
                                     Added On
                                 </Table.HeadCell>
-                                <Table.HeadCell style={{ width: '120px' }}>Actions</Table.HeadCell>
                             </Table.Head>
                             <Table.Body>
                                 {paginatedIps.length === 0 ? (
@@ -773,18 +866,13 @@ const ManualWhitelist: React.FC = () => {
                                             >
                                                 {row.ip}
                                             </Table.Cell>
+                                            <Table.Cell>
+                                                {row.filename || 'Manual Entry'}
+                                            </Table.Cell>
                                             <Table.Cell>{row.user || 'Unknown'}</Table.Cell>
                                             <Table.Cell>{row.reason || '-'}</Table.Cell>
                                             <Table.Cell>
                                                 {formatTimestamp(row.timestamp)}
-                                            </Table.Cell>
-                                            <Table.Cell>
-                                                <Button
-                                                    label="Remove"
-                                                    appearance="destructive"
-                                                    onClick={() => handleRemoveIp(row._key)}
-                                                    disabled={isLoading}
-                                                />
                                             </Table.Cell>
                                         </Table.Row>
                                     ))
