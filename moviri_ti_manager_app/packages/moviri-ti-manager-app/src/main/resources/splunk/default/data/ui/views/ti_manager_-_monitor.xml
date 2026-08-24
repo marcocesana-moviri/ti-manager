@@ -1047,7 +1047,7 @@
                 "ds_6YFdR5oc": {
                         "type": "ds.search",
                         "options": {
-                                "query": "index=_internal source=\"*master_merger*\" \"[TI MANAGER DEBUG] [I/O] Read 10 Blacklist files\" OR \"[TI MANAGER INFO] [CIDR REBUILD]\"\n| rex field=_raw \"Loaded\\s+(?<starting_subnets>\\d+)\"\n| rex field=_raw \"Blacklist:\\s+(?<ending_subnets>\\d+).*Whitelist:\\s+(?<ending_whites>\\d+).*Elapsed:\\s+(?<elapsed>[^s]+)\"\n| stats last(starting_subnets) as starting_subnets last(ending_subnets) as ending_subnets\n| eval compression_ratio=round(((starting_subnets-ending_subnets)/starting_subnets)*100, 2)",
+                                "query": "index=_internal source=\"*master_merger*\" \"[TI MANAGER DEBUG] [I/O] Read 10 Blacklist files\" OR \"[TI MANAGER INFO] [CIDR REBUILD]\"\n| rex field=_raw \"Loaded\\s+(?<starting_subnets>\\d+)\"\n| rex field=_raw \"Blacklist:\\s+(?<ending_subnets>\\d+).*Whitelist:\\s+(?<ending_whites>\\d+).*Elapsed:\\s+(?<elapsed>[^s]+)\"\n| stats latest(starting_subnets) as starting_subnets latest(ending_subnets) as ending_subnets\n| eval compression_ratio=round(((starting_subnets-ending_subnets)/starting_subnets)*100, 2)",
                                 "queryParameters": {
                                         "earliest": "$global_time.earliest$",
                                         "latest": "$global_time.latest$"
