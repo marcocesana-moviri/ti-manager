@@ -53,6 +53,15 @@ const isValidCIDR = (cidr: string): boolean => {
     return cidrRegex.test(cidr);
 };
 
+// HELPER: Spezza stringhe multiple (virgola, spazio, punto e virgola) e aggiunge /32 se manca
+const parseAndNormalizeIps = (input: string): string[] => {
+    return input
+        .split(/[\s,;]+/)
+        .map((ip) => ip.trim())
+        .filter((ip) => ip.length > 0)
+        .map((ip) => (ip.includes('/') ? ip : `${ip}/32`));
+};
+
 const formatTimestamp = (isoString?: string) => {
     if (!isoString) return '-';
     const date = new Date(isoString);
@@ -245,37 +254,56 @@ const ManualBlacklist: React.FC = () => {
         }
     };
 
-    const isInputEmpty = newIp.trim() === '';
-    const isFormatValid = isInputEmpty || isValidCIDR(newIp.trim());
-    const isDuplicate = ips.some((row) => row.ip === newIp.trim());
+    // --- Validazione Input Singolo / Multiplo ---
+    const ipsToAdd = useMemo(() => parseAndNormalizeIps(newIp), [newIp]);
+    const isInputEmpty = ipsToAdd.length === 0;
+    const isTooMany = ipsToAdd.length > 20; // Limite manuale consigliato
+    const isFormatValid = isInputEmpty || ipsToAdd.every(isValidCIDR);
+    const isDuplicate = ipsToAdd.some((ip) => ips.some((row) => row.ip === ip));
 
     const handleAddIp = async () => {
-        const trimmedIp = newIp.trim();
-        if (!isValidCIDR(trimmedIp) || isDuplicate) return;
+        if (!isFormatValid || isDuplicate || isTooMany || isInputEmpty) return;
 
         setError(null);
         setIsLoading(true);
-        try {
-            const response = await splunkFetch(KV_STORE_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    ip: trimmedIp,
-                    user: newUser.trim() || 'Unknown',
-                    reason: newReason.trim() || 'No reason provided',
-                    timestamp: new Date().toISOString(),
-                }),
-            });
+        const nowIso = new Date().toISOString();
 
-            if (response.ok) {
-                setNewIp('');
-                setNewReason('');
-                await fetchIps();
+        // Creiamo l'array con il payload finale
+        const payload = ipsToAdd.map((ip) => ({
+            ip: ip,
+            user: newUser.trim() || 'Unknown',
+            reason: newReason.trim() || 'No reason provided',
+            timestamp: nowIso,
+        }));
+
+        try {
+            if (payload.length === 1) {
+                // Inserimento di un singolo record
+                const response = await splunkFetch(KV_STORE_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload[0]),
+                });
+
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
             } else {
-                const errorText = await response.text();
-                setError(`Failed to add IP (${response.status}): ${errorText}`);
-                setIsLoading(false);
+                // Inserimento batch fino a 20 record
+                const response = await splunkFetch(`${KV_STORE_URL}/batch_save`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
             }
+
+            setNewIp('');
+            setNewReason('');
+            await fetchIps();
         } catch (err: any) {
             setError(`Network error while saving: ${err.message || String(err)}`);
             setIsLoading(false);
@@ -381,12 +409,16 @@ const ManualBlacklist: React.FC = () => {
 
         const parsedData = lines.map((line) => {
             const parts = line.split(',');
+            const rawIp = parts[0]?.trim() || '';
+            // Normalizzazione: aggiunge /32 se assente anche via file
+            const ip = rawIp.includes('/') ? rawIp : `${rawIp}/32`;
+
             return {
-                ip: parts[0]?.trim() || '',
+                ip: ip,
                 user: parts[1]?.trim() || newUser.trim() || 'Unknown',
                 reason: parts[2]?.trim() || newReason.trim() || 'Bulk upload',
                 timestamp: now,
-                filename: fileName, // Aggiunto il nome del file al payload
+                filename: fileName,
             };
         });
 
@@ -603,9 +635,9 @@ const ManualBlacklist: React.FC = () => {
                             <Text
                                 value={newIp}
                                 onChange={(e, { value }: { value: string }) => setNewIp(value)}
-                                placeholder="IP (e.g. 192.168.1.0/24)"
-                                error={!isFormatValid || isDuplicate}
-                                style={{ width: '220px' }}
+                                placeholder="IPs (comma separated, max 20)"
+                                error={!isFormatValid || isDuplicate || isTooMany}
+                                style={{ width: '250px' }}
                             />
                             <Text
                                 value={newUser}
@@ -620,11 +652,15 @@ const ManualBlacklist: React.FC = () => {
                                 style={{ width: '250px' }}
                             />
                             <Button
-                                label="Add Single IP"
+                                label="Add IP(s)"
                                 appearance="primary"
                                 onClick={handleAddIp}
                                 disabled={
-                                    isInputEmpty || !isFormatValid || isDuplicate || isLoading
+                                    isInputEmpty ||
+                                    !isFormatValid ||
+                                    isDuplicate ||
+                                    isTooMany ||
+                                    isLoading
                                 }
                             />
 
@@ -652,10 +688,23 @@ const ManualBlacklist: React.FC = () => {
                             />
                         </div>
 
-                        {!isFormatValid && (
+                        {!isFormatValid && !isTooMany && (
                             <div style={{ color: '#d30909', fontSize: '12px', marginTop: '8px' }}>
-                                Invalid CIDR format. Ensure you provide an IP and a subnet mask
-                                (e.g., 192.168.1.0/24).
+                                Invalid format. Ensure IPs are valid (e.g., 192.168.1.1 or
+                                10.0.0.0/24).
+                            </div>
+                        )}
+                        {isTooMany && (
+                            <div
+                                style={{
+                                    color: '#d30909',
+                                    fontSize: '12px',
+                                    marginTop: '8px',
+                                    fontWeight: 'bold',
+                                }}
+                            >
+                                Max 20 IPs allowed manually. For larger sets, please use Bulk
+                                Upload.
                             </div>
                         )}
                         {isFormatValid && isDuplicate && (
@@ -667,7 +716,7 @@ const ManualBlacklist: React.FC = () => {
                                     marginTop: '8px',
                                 }}
                             >
-                                This IP is already in the blacklist.
+                                One or more entered IPs are already in the blacklist.
                             </div>
                         )}
                     </div>
