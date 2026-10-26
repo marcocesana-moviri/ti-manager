@@ -31,7 +31,7 @@ PYTHON_VERSION="3.9.20"
 PYTHON_BIN=""
 
 DA_NAME="moviri_ti_manager_app"
-DA_VERSION="1.0.0"
+DA_VERSION="1.1.0"
 DA_APP_DIR="${PROJECT_ROOT}/${DA_NAME}"
 DA_STAGE_DIR="${DA_APP_DIR}/packages/moviri-ti-manager-app/stage"
 DA_PACKAGE_NAME="${DA_NAME}-${DA_VERSION}.tar.gz"
