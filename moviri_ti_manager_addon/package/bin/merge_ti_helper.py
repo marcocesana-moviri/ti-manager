@@ -592,14 +592,14 @@ def update_remote_csv_lookup(
 ) -> None:
     """
     Executes a remote SPL search to dump the KV Store collection into a CSV lookup.
-    SPL: | inputlookup <collection> | outputlookup <collection>_csv.csv
+    SPL: | inputlookup <collection> | eval time=now() | table ip time | outputlookup <collection>_csv.csv
     """
     url = f"https://{search_head}:{search_head_port}/servicesNS/nobody/{app_name}/search/jobs"
     auth_tuple = (splunk_username, splunk_password)
 
     # AGGIUNTO IL SUFFISSO .csv OBBLIGATORIO PER OUTPUTLOOKUP
     csv_name = f"{collection_name}_csv"
-    spl_query = f"| inputlookup {collection_name} | outputlookup {csv_name}"
+    spl_query = f"| inputlookup {collection_name} | eval time=now() | table ip time | outputlookup {csv_name}"
 
     payload = {
         "search": spl_query,
@@ -718,6 +718,15 @@ def _process_lists(
 
     if current_state_hash == previous_state_hash and os.path.exists(merged_path):
         logger.info(f"{LOG_INFO_TAG} [SYNC SKIP] No changes detected in source feeds (Hash: {current_state_hash}). Skipping intensive processing.")
+        update_remote_csv_lookup(
+            logger, 
+            splunk_username, 
+            splunk_password, 
+            search_head, 
+            search_head_port, 
+            app_name, 
+            master_threatlist_collection
+        )
         return
     
     logger.info(f"{LOG_INFO_TAG} [SYNC PROCEED] Changes detected. Proceeding with network optimization...")
