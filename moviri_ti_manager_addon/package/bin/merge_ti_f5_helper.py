@@ -69,7 +69,7 @@ def get_lookups_dirs() -> dict[str, str]:
 def _calculate_state_hash(lookups_dirs: dict[str, str]) -> str:
     """
     Calcola un hash MD5 cumulativo del contenuto di tutti i file CSV 
-    presenti nelle cartelle blacklists e whitelists che contengono 'f5' nel nome.
+    presenti nelle cartelle blacklists e whitelists
     """
     hasher = hashlib.md5()
     
@@ -80,10 +80,6 @@ def _calculate_state_hash(lookups_dirs: dict[str, str]) -> str:
         
         for filepath in csv_files:
             filename = os.path.basename(filepath)
-            
-            # Filtro: calcola l'hash solo per i file con "f5" (case-insensitive) nel nome
-            if "f5" not in filename.lower():
-                continue
                 
             # Aggiungiamo il nome del file all'hash
             hasher.update(filename.encode('utf-8'))
@@ -207,11 +203,11 @@ def extract_and_filter_networks(logger: logging.Logger, lookups_dirs: dict[str, 
     mathematical subtraction (O(N+M)) to surgically separate whitelist exceptions.
     """
     # 1. RAW READ
-    wl_files = glob.glob(os.path.join(lookups_dirs["whitelists"], "*_f5.csv"))
+    wl_files = glob.glob(os.path.join(lookups_dirs["whitelists"], "*.csv"))
     wl_v4, wl_v6 = _read_networks_from_files(logger, wl_files, "Whitelist")
     wl_v4.extend(STATIC_PRIVATE_NETWORKS)
     
-    bl_files = glob.glob(os.path.join(lookups_dirs["blacklists"], "*_f5.csv"))
+    bl_files = glob.glob(os.path.join(lookups_dirs["blacklists"], "*.csv"))
     raw_bl_v4, raw_bl_v6 = _read_networks_from_files(logger, bl_files, "Blacklist")
     
     # 2. INTERVAL CREATION (This step also acts as a native "collapse")
@@ -366,7 +362,7 @@ def get_list_from_search_head(
     
     skip = 0
     total_downloaded = 0
-    csv_path = os.path.join(save_dir, f"{collection_name}_f5.csv")
+    csv_path = os.path.join(save_dir, f"{collection_name}.csv")
 
     logger.debug(f"{LOG_DEBUG_TAG} Starting download of list '{collection_name}' from KV Store: {url}")
 
@@ -409,7 +405,7 @@ def get_list_from_search_head(
                 valid_ips = [
                     item.get("ip") 
                     for item in data 
-                    if item.get("ip") and (item.get("target") is None or "f5" in str(item.get("target")).lower())
+                    if item.get("ip")
                 ]
                 if valid_ips:
                     csv_file.write("\n".join(valid_ips) + "\n")
@@ -709,7 +705,6 @@ def _process_lists(
     allowlist_collection: str,
     manual_denylist_collection: str,
     manual_allowlist_collection: str,
-    es_automatic_detection_collection: str,
     event_writer: smi.EventWriter,
 ) -> None:
     
@@ -721,7 +716,6 @@ def _process_lists(
 
     # 1. RETRIEVE MANUAL LISTS
     get_list_from_search_head(logger, lookups_dirs["blacklists"], search_head, search_head_port, splunk_username, splunk_password, app_name, manual_denylist_collection)
-    get_list_from_search_head(logger, lookups_dirs["blacklists"], search_head, search_head_port, splunk_username, splunk_password, app_name, es_automatic_detection_collection)
     get_list_from_search_head(logger, lookups_dirs["whitelists"], search_head, search_head_port, splunk_username, splunk_password, app_name, manual_allowlist_collection)
 
     # 2. STATE HASH CHECK
@@ -754,7 +748,7 @@ def _process_lists(
         write_merged_csv(whitelist_path, new_merged_wl, header="ip")
         push_allowlist_to_kvstore(logger, splunk_username, splunk_password, new_merged_wl, search_head, search_head_port, app_name, allowlist_collection)
     except Exception as e:
-        logger.error(f"{LOG_ERROR_TAG} [SYNC ERROR] Whitelist synchronization failed: {e}")
+        logger.error(f"{LOG_ERROR_TAG} [SYNC ERROR] {allowlist_collection} synchronization failed: {e}")
     
     # 5. BLACKLIST DIFF CALCULATION
     existing_bl = read_existing_merged(merged_path)
@@ -822,17 +816,15 @@ def stream_events(inputs: smi.InputDefinition, event_writer: smi.EventWriter):
             account_name = input_item.get("account")
             search_head = input_item.get("search_head")
             search_head_port = input_item.get("search_head_port")
-            app_name = input_item.get("app_name")
-            
-            denylist_f5_collection = input_item.get("denylist_f5_collection")
-            allowlist_collection = input_item.get("allowlist_collection")
-            manual_denylist_collection = input_item.get("manual_denylist_collection")
-            manual_allowlist_collection = input_item.get("manual_allowlist_collection")
-            es_automatic_detection_collection = input_item.get("es_automatic_detection_collection")
+            app_name = "moviri_ti_manager_app"
+            denylist_f5_collection = "denylist_f5"
+            allowlist_collection = "allowlist"
+            manual_denylist_collection = "manual_denylist"
+            manual_allowlist_collection = "manual_allowlist"
 
             splunk_username, splunk_password = get_account_settings(session_key, account_name, logger)
 
-            logger.debug(f"{LOG_DEBUG_TAG} Starting merge and push process for denylist F5: {denylist_f5_collection}")
+            logger.debug(f"{LOG_DEBUG_TAG} Starting merge and push process for DenyList F5: {denylist_f5_collection}")
 
             _process_lists(
                 logger, 
@@ -848,7 +840,6 @@ def stream_events(inputs: smi.InputDefinition, event_writer: smi.EventWriter):
                 allowlist_collection,
                 manual_denylist_collection,
                 manual_allowlist_collection,
-                es_automatic_detection_collection,
                 event_writer
             )
 
