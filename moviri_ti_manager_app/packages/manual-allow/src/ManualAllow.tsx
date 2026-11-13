@@ -25,7 +25,6 @@ interface IPRow {
     timestamp: string;
     expirydate: string;
     source?: string;
-    target?: string;
 }
 
 interface FileListGroup {
@@ -89,7 +88,6 @@ const ManualAllow: React.FC = () => {
     const [newIp, setNewIp] = useState<string>('');
     const [newUser, setNewUser] = useState<string>('');
     const [newReason, setNewReason] = useState<string>('');
-    const [newTarget, setNewTarget] = useState<string>('Both (F5+PaloAlto)');
 
     const [newDurationValue, setNewDurationValue] = useState<string>('24');
     const [newDurationUnit, setNewDurationUnit] = useState<string>('h');
@@ -227,8 +225,7 @@ const ManualAllow: React.FC = () => {
             row.ip.toLowerCase().includes(query) ||
             (row.user && row.user.toLowerCase().includes(query)) ||
             (row.reason && row.reason.toLowerCase().includes(query)) ||
-            (row.source && row.source.toLowerCase().includes(query)) ||
-            (row.target && row.target.toLowerCase().includes(query))
+            (row.source && row.source.toLowerCase().includes(query))
         );
     });
 
@@ -298,7 +295,6 @@ const ManualAllow: React.FC = () => {
             reason: newReason.trim() || 'No reason provided',
             timestamp: nowIso,
             expirydate: expiryIso,
-            target: newTarget,
         }));
 
         try {
@@ -432,7 +428,6 @@ const ManualAllow: React.FC = () => {
                 timestamp: now,
                 expirydate: expiryIso,
                 source: fileName,
-                target: newTarget,
             };
         });
 
@@ -671,35 +666,6 @@ const ManualAllow: React.FC = () => {
                                 <span
                                     style={{ fontSize: '14px', fontWeight: 500, color: '#3C444D' }}
                                 >
-                                    Target:
-                                </span>
-                                <Select
-                                    value={newTarget}
-                                    onChange={(e: any, data: any) => setNewTarget(data.value)}
-                                    style={{ width: '160px' }}
-                                    disabled={isLoading}
-                                >
-                                    <Select.Option
-                                        label="Both (F5+PaloAlto)"
-                                        value="Both (F5+PaloAlto)"
-                                    />
-                                    <Select.Option label="F5" value="F5" />
-                                    <Select.Option label="PaloAlto" value="PaloAlto" />
-                                </Select>
-                            </div>
-
-                            <div
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    borderLeft: '1px solid #ccc',
-                                    paddingLeft: '15px',
-                                }}
-                            >
-                                <span
-                                    style={{ fontSize: '14px', fontWeight: 500, color: '#3C444D' }}
-                                >
                                     Duration:
                                 </span>
                                 <Text
@@ -863,7 +829,7 @@ const ManualAllow: React.FC = () => {
                         <Text
                             value={searchQuery}
                             onChange={(e, { value }: { value: string }) => setSearchQuery(value)}
-                            placeholder="Search by IP, Target, User, Source, or Reason..."
+                            placeholder="Search by IP, User, Source, or Reason..."
                             canClear
                             style={{ width: '350px' }}
                         />
@@ -921,13 +887,6 @@ const ManualAllow: React.FC = () => {
                                     sortDir={sortKey === 'ip' ? sortDir : 'none'}
                                 >
                                     IP Address (CIDR)
-                                </Table.HeadCell>
-                                <Table.HeadCell
-                                    onSort={handleSort}
-                                    sortKey="target"
-                                    sortDir={sortKey === 'target' ? sortDir : 'none'}
-                                >
-                                    Target
                                 </Table.HeadCell>
                                 <Table.HeadCell
                                     onSort={handleSort}
@@ -1005,9 +964,6 @@ const ManualAllow: React.FC = () => {
                                                 }}
                                             >
                                                 {row.ip}
-                                            </Table.Cell>
-                                            <Table.Cell>
-                                                {row.target || 'Both (F5+PaloAlto)'}
                                             </Table.Cell>
                                             <Table.Cell>{row.source || 'Manual Entry'}</Table.Cell>
                                             <Table.Cell>{row.user || 'Unknown'}</Table.Cell>
