@@ -700,7 +700,7 @@ const ManualDeny: React.FC = () => {
                                 <span
                                     style={{ fontSize: '14px', fontWeight: 500, color: '#3C444D' }}
                                 >
-                                    Duration:
+                                    Expiration:
                                 </span>
                                 <Text
                                     value={newDurationValue}
@@ -770,7 +770,7 @@ const ManualDeny: React.FC = () => {
                         )}
                         {!isDurationValid && (
                             <div style={{ color: '#d30909', fontSize: '12px', marginTop: '8px' }}>
-                                Please enter a valid number greater than 0 for the duration.
+                                Please enter a valid number greater than 0 for the expiration.
                             </div>
                         )}
                         {isTooMany && (
