@@ -2,11 +2,14 @@ import styled from 'styled-components';
 import { variables, mixins } from '@splunk/themes';
 
 const StyledContainer = styled.div`
-    ${mixins.reset('inline-block')};
+    ${mixins.reset('block')};
+    width: 100%;
+    box-sizing: border-box;
     font-size: ${variables.fontSizeLarge};
     line-height: 200%;
-    margin: ${variables.spacingLarge} ${variables.spacingSmall};
+    margin: ${variables.spacingLarge} 0;
     padding: ${variables.spacingLarge} ${variables.spacingXXLarge};
+
     border-radius: ${variables.borderRadius};
     box-shadow: ${variables.overlayShadow};
     background-color: ${variables.backgroundColorSection};
