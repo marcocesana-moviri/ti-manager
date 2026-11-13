@@ -69,7 +69,7 @@ def get_lookups_dirs() -> dict[str, str]:
 def _calculate_state_hash(lookups_dirs: dict[str, str]) -> str:
     """
     Calcola un hash MD5 cumulativo del contenuto di tutti i file CSV 
-    presenti nelle cartelle blacklists e whitelists.
+    presenti nelle cartelle blacklists e whitelists che contengono 'f5' nel nome.
     """
     hasher = hashlib.md5()
     
@@ -79,8 +79,14 @@ def _calculate_state_hash(lookups_dirs: dict[str, str]) -> str:
         csv_files = sorted(glob.glob(os.path.join(folder_path, "*.csv")))
         
         for filepath in csv_files:
+            filename = os.path.basename(filepath)
+            
+            # Filtro: calcola l'hash solo per i file con "f5" (case-insensitive) nel nome
+            if "f5" not in filename.lower():
+                continue
+                
             # Aggiungiamo il nome del file all'hash
-            hasher.update(os.path.basename(filepath).encode('utf-8'))
+            hasher.update(filename.encode('utf-8'))
             
             # Leggiamo il contenuto a blocchi (veloce e memory-safe) per generare l'hash
             with open(filepath, 'rb') as f:
@@ -201,11 +207,11 @@ def extract_and_filter_networks(logger: logging.Logger, lookups_dirs: dict[str, 
     mathematical subtraction (O(N+M)) to surgically separate whitelist exceptions.
     """
     # 1. RAW READ
-    wl_files = glob.glob(os.path.join(lookups_dirs["whitelists"], "*.csv"))
+    wl_files = glob.glob(os.path.join(lookups_dirs["whitelists"], "*_f5.csv"))
     wl_v4, wl_v6 = _read_networks_from_files(logger, wl_files, "Whitelist")
     wl_v4.extend(STATIC_PRIVATE_NETWORKS)
     
-    bl_files = glob.glob(os.path.join(lookups_dirs["blacklists"], "*.csv"))
+    bl_files = glob.glob(os.path.join(lookups_dirs["blacklists"], "*_f5.csv"))
     raw_bl_v4, raw_bl_v6 = _read_networks_from_files(logger, bl_files, "Blacklist")
     
     # 2. INTERVAL CREATION (This step also acts as a native "collapse")
@@ -341,7 +347,7 @@ def get_account_settings(
     return splunk_username, splunk_password
 
 
-def get_manual_list_from_search_head(
+def get_list_from_search_head(
     logger: logging.Logger, 
     save_dir: str, 
     search_head: str,
@@ -352,7 +358,7 @@ def get_manual_list_from_search_head(
     collection_name: str,
 ) -> None:
     """
-    Downloads a generic manual list (e.g. blacklist, whitelist) from Splunk KV Store in blocks (pagination) 
+    Downloads a generic list (e.g. blacklist, whitelist) from Splunk KV Store in blocks (pagination) 
     and saves it as a single-column 'ip' CSV.
     Implements retry and backoff in case of network errors.
     """    
@@ -360,7 +366,7 @@ def get_manual_list_from_search_head(
     
     skip = 0
     total_downloaded = 0
-    csv_path = os.path.join(save_dir, f"{collection_name}.csv")
+    csv_path = os.path.join(save_dir, f"{collection_name}_f5.csv")
 
     logger.debug(f"{LOG_DEBUG_TAG} Starting download of list '{collection_name}' from KV Store: {url}")
 
@@ -400,7 +406,11 @@ def get_manual_list_from_search_head(
                     break
                 
                 # Stream write items avoiding csv.writer overhead
-                valid_ips = [item.get("ip") for item in data if item.get("ip")]
+                valid_ips = [
+                    item.get("ip") 
+                    for item in data 
+                    if item.get("ip") and (item.get("target") is None or "f5" in str(item.get("target")).lower())
+                ]
                 if valid_ips:
                     csv_file.write("\n".join(valid_ips) + "\n")
                 
@@ -418,7 +428,7 @@ def get_manual_list_from_search_head(
         logger.error(f"{LOG_ERROR_TAG} Irreversible error retrieving list '{collection_name}' from KV Store: {e}")
 
 
-def push_master_whitelist_to_kvstore(
+def push_allowlist_to_kvstore(
     logger: logging.Logger,
     splunk_username: str,
     splunk_password: str,
@@ -494,7 +504,7 @@ def push_master_whitelist_to_kvstore(
         logger.debug(f"{LOG_DEBUG_TAG} Successfully added {len(whitelist_ips)} IPs to KV Store {collection_name}")
 
 
-def push_master_threatlist(
+def push_denylist_f5(
     logger: logging.Logger,
     splunk_username: str,
     splunk_password: str,
@@ -506,7 +516,7 @@ def push_master_threatlist(
     collection_name: str,
 ) -> None:
     """
-    Synchronizes the newly calculated Master Threatlist differences to the remote Splunk KV Store.
+    Synchronizes the newly calculated DenyList F5 differences to the remote Splunk KV Store.
     Implements retry and backoff in case of network errors. Uses MD5 for safe _key generation.
     """
     base_url = f"https://{search_head}:{search_head_port}/servicesNS/nobody/{app_name}/storage/collections/data/{collection_name}"
@@ -598,7 +608,7 @@ def update_remote_csv_lookup(
     auth_tuple = (splunk_username, splunk_password)
 
     # AGGIUNTO IL SUFFISSO .csv OBBLIGATORIO PER OUTPUTLOOKUP
-    csv_name = f"{collection_name}_csv"
+    csv_name = f"{collection_name}_managedlookup"
     spl_query = f"| inputlookup {collection_name} | eval time=now() | table ip time | outputlookup {csv_name}"
 
     payload = {
@@ -695,22 +705,24 @@ def _process_lists(
     search_head: str,
     search_head_port: int,
     app_name: str,
-    master_threatlist_collection: str,
-    master_whitelist_collection: str,
-    manual_blacklist_collection: str,
-    manual_whitelist_collection: str,
+    denylist_f5_collection: str,
+    allowlist_collection: str,
+    manual_denylist_collection: str,
+    manual_allowlist_collection: str,
+    es_automatic_detection_collection: str,
     event_writer: smi.EventWriter,
 ) -> None:
     
     lookups_dirs = get_lookups_dirs()
-    merged_path = os.path.join(lookups_dirs["master"], f"{master_threatlist_collection}.csv")
-    state_hash_path = os.path.join(lookups_dirs["master"], "state.hash")
+    merged_path = os.path.join(lookups_dirs["master"], f"{denylist_f5_collection}.csv")
+    state_hash_path = os.path.join(lookups_dirs["master"], "state_f5.hash")
 
     logger.info(f"{LOG_INFO_TAG} [SYNC START] Beginning synchronization cycle for {input_name}")
 
     # 1. RETRIEVE MANUAL LISTS
-    get_manual_list_from_search_head(logger, lookups_dirs["blacklists"], search_head, search_head_port, splunk_username, splunk_password, app_name, manual_blacklist_collection)
-    get_manual_list_from_search_head(logger, lookups_dirs["whitelists"], search_head, search_head_port, splunk_username, splunk_password, app_name, manual_whitelist_collection)
+    get_list_from_search_head(logger, lookups_dirs["blacklists"], search_head, search_head_port, splunk_username, splunk_password, app_name, manual_denylist_collection)
+    get_list_from_search_head(logger, lookups_dirs["blacklists"], search_head, search_head_port, splunk_username, splunk_password, app_name, es_automatic_detection_collection)
+    get_list_from_search_head(logger, lookups_dirs["whitelists"], search_head, search_head_port, splunk_username, splunk_password, app_name, manual_allowlist_collection)
 
     # 2. STATE HASH CHECK
     current_state_hash = _calculate_state_hash(lookups_dirs)
@@ -725,7 +737,7 @@ def _process_lists(
             search_head, 
             search_head_port, 
             app_name, 
-            master_threatlist_collection
+            denylist_f5_collection
         )
         return
     
@@ -736,11 +748,11 @@ def _process_lists(
     new_merged_bl, new_merged_wl = extract_and_filter_networks(logger, lookups_dirs)
     
     # 4. WHITELIST PUSH (Unconditional)
-    whitelist_filename = f"{master_whitelist_collection}.csv"
+    whitelist_filename = f"{allowlist_collection}.csv"
     whitelist_path = os.path.join(lookups_dirs["master"], whitelist_filename)
     try:
         write_merged_csv(whitelist_path, new_merged_wl, header="ip")
-        push_master_whitelist_to_kvstore(logger, splunk_username, splunk_password, new_merged_wl, search_head, search_head_port, app_name, master_whitelist_collection)
+        push_allowlist_to_kvstore(logger, splunk_username, splunk_password, new_merged_wl, search_head, search_head_port, app_name, allowlist_collection)
     except Exception as e:
         logger.error(f"{LOG_ERROR_TAG} [SYNC ERROR] Whitelist synchronization failed: {e}")
     
@@ -752,18 +764,18 @@ def _process_lists(
     if added_ips or removed_ips or not os.path.exists(merged_path):
         try:
             # PUSH REMOTO
-            logger.info(f"{LOG_INFO_TAG} [KVSTORE PUSH] Propagating Threatlist diffs to Splunk...")
-            push_master_threatlist(logger, splunk_username, splunk_password, added_ips, removed_ips, search_head, search_head_port, app_name, master_threatlist_collection)
+            logger.info(f"{LOG_INFO_TAG} [KVSTORE PUSH] Propagating {denylist_f5_collection} diffs to Splunk...")
+            push_denylist_f5(logger, splunk_username, splunk_password, added_ips, removed_ips, search_head, search_head_port, app_name, denylist_f5_collection)
             
             # COMMIT LOCALE
             write_merged_csv(merged_path, new_merged_bl, header="ip")
 
             # AUDIT EVENTS
             if added_ips:
-                logs_added = _generate_logs(added_ips, "added", master_threatlist_collection)
+                logs_added = _generate_logs(added_ips, "added", denylist_f5_collection)
                 write_events(index, sourcetype, logs_added, input_name, event_writer, logger)
             if removed_ips:
-                logs_removed = _generate_logs(removed_ips, "removed", master_threatlist_collection)
+                logs_removed = _generate_logs(removed_ips, "removed", denylist_f5_collection)
                 write_events(index, sourcetype, logs_removed, input_name, event_writer, logger)
                 
             log.events_ingested(logger, input_name, sourcetype, len(added_ips) + len(removed_ips), index)
@@ -777,12 +789,12 @@ def _process_lists(
                     search_head, 
                     search_head_port, 
                     app_name, 
-                    master_threatlist_collection
+                    denylist_f5_collection
                 )
             logger.info(f"{LOG_INFO_TAG} [SYNC SUCCESS] Synchronization cycle completed successfully.")
 
         except Exception as e:
-            logger.error(f"{LOG_ERROR_TAG} [CRITICAL] Blacklist Sync failed. Rolling back local state. Error: {e}")
+            logger.error(f"{LOG_ERROR_TAG} [CRITICAL] DenyList F5 Sync failed. Rolling back local state. Error: {e}")
             return # Ferma qui, non aggiornare l'hash.
             
     # Alla fine, solo se tutto è andato bene, aggiorniamo l'hash
@@ -812,14 +824,15 @@ def stream_events(inputs: smi.InputDefinition, event_writer: smi.EventWriter):
             search_head_port = input_item.get("search_head_port")
             app_name = input_item.get("app_name")
             
-            master_threatlist_collection = input_item.get("master_threatlist_collection")
-            master_whitelist_collection = input_item.get("master_whitelist_collection")
-            manual_blacklist_collection = input_item.get("manual_blacklist_collection")
-            manual_whitelist_collection = input_item.get("manual_whitelist_collection")
+            denylist_f5_collection = input_item.get("denylist_f5_collection")
+            allowlist_collection = input_item.get("allowlist_collection")
+            manual_denylist_collection = input_item.get("manual_denylist_collection")
+            manual_allowlist_collection = input_item.get("manual_allowlist_collection")
+            es_automatic_detection_collection = input_item.get("es_automatic_detection_collection")
 
             splunk_username, splunk_password = get_account_settings(session_key, account_name, logger)
 
-            logger.debug(f"{LOG_DEBUG_TAG} Starting merge and push process for master threatlist: {master_threatlist_collection}")
+            logger.debug(f"{LOG_DEBUG_TAG} Starting merge and push process for denylist F5: {denylist_f5_collection}")
 
             _process_lists(
                 logger, 
@@ -831,10 +844,11 @@ def stream_events(inputs: smi.InputDefinition, event_writer: smi.EventWriter):
                 search_head, 
                 search_head_port, 
                 app_name, 
-                master_threatlist_collection,
-                master_whitelist_collection,
-                manual_blacklist_collection,
-                manual_whitelist_collection,
+                denylist_f5_collection,
+                allowlist_collection,
+                manual_denylist_collection,
+                manual_allowlist_collection,
+                es_automatic_detection_collection,
                 event_writer
             )
 
