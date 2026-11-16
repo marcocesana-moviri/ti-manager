@@ -281,6 +281,105 @@
                     ],
                     "inputHelperModule": "merge_ti_f5_helper",
                     "title": "Merge Threat Intelligence F5"
+                },
+                {
+                    "name": "merge_ti_paloalto",
+                    "entity": [
+                        {
+                            "type": "text",
+                            "label": "Sourcetype",
+                            "field": "sourcetype",
+                            "defaultValue": "ti_manager:diff:paloalto",
+                            "options": {
+                                "display": false,
+                                "enable": false
+                            },
+                            "validators": []
+                        },
+                        {
+                            "type": "text",
+                            "label": "Name",
+                            "validators": [
+                                {
+                                    "type": "regex",
+                                    "errorMsg": "Input Name must begin with a letter and consist exclusively of alphanumeric characters and underscores",
+                                    "pattern": "^[a-zA-Z]\\w*$"
+                                },
+                                {
+                                    "type": "string",
+                                    "errorMsg": "Length of input name should be between 1 and 100",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                }
+                            ],
+                            "field": "name",
+                            "help": "A unique name for the data input",
+                            "required": true
+                        },
+                        {
+                            "type": "interval",
+                            "label": "Interval",
+                            "defaultValue": "300",
+                            "field": "interval",
+                            "options": {
+                                "range": [
+                                    60,
+                                    2592001
+                                ]
+                            },
+                            "help": "Time interval of the data input, in seconds",
+                            "required": true
+                        },
+                        {
+                            "type": "singleSelect",
+                            "label": "Account to use",
+                            "help": "Account to use for this input",
+                            "field": "account",
+                            "required": true,
+                            "options": {
+                                "referenceName": "account"
+                            }
+                        },
+                        {
+                            "type": "index",
+                            "field": "index",
+                            "label": "Index"
+                        },
+                        {
+                            "type": "text",
+                            "label": "Search Head IP/Hostname",
+                            "validators": [
+                                {
+                                    "type": "regex",
+                                    "errorMsg": "Please enter a valid IP address or hostname (do not include http:// or https://)",
+                                    "pattern": "^([a-zA-Z0-9.-]+)$"
+                                }
+                            ],
+                            "field": "search_head",
+                            "help": "The IP address or hostname of the Search Head",
+                            "required": true
+                        },
+                        {
+                            "type": "text",
+                            "label": "Search Head Management Port",
+                            "field": "search_head_port",
+                            "help": "Management Port number on the Search Head",
+                            "required": true,
+                            "validators": [
+                                {
+                                    "type": "number",
+                                    "errorMsg": "Management Port must be a number between 1 and 65535",
+                                    "range": [
+                                        1,
+                                        65535
+                                    ],
+                                    "isInteger": true
+                                }
+                            ]
+                        }
+                    ],
+                    "inputHelperModule": "merge_ti_paloalto_helper",
+                    "title": "Merge Threat Intelligence Palo Alto"
                 }
             ],
             "title": "Inputs",

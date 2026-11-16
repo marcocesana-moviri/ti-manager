@@ -355,73 +355,96 @@ def get_list_from_search_head(
 ) -> None:
     """
     Downloads a generic list (e.g. blacklist, whitelist) from Splunk KV Store in blocks (pagination) 
-    and saves it as a single-column 'ip' CSV.
+    and saves it to CSV files. For 'manual_denylist', splits output based on 'target' field.
     Implements retry and backoff in case of network errors.
     """    
     url = f"https://{search_head}:{search_head_port}/servicesNS/nobody/{app_name}/storage/collections/data/{collection_name}"
     
     skip = 0
     total_downloaded = 0
-    csv_path = os.path.join(save_dir, f"{collection_name}.csv")
 
     logger.debug(f"{LOG_DEBUG_TAG} Starting download of list '{collection_name}' from KV Store: {url}")
 
+    file_handles = {}
     try:
-        with open(csv_path, mode="w", newline="", encoding="utf-8") as csv_file:
-            # Using basic write for streaming large API responses
-            csv_file.write("ip\n")
-            
-            while True:
-                params = {"limit": KVSTORE_LIMIT, "skip": skip}
-                data = None
-                
-                for attempt in range(1, REQUEST_RETRIES + 1):
-                    try:
-                        response = requests.get(
-                            url,
-                            auth=(splunk_username, splunk_password),
-                            params=params,
-                            verify=False,
-                            timeout=REQUEST_TIMEOUT
-                        )
-                        response.raise_for_status()
-                        data = response.json()
-                        break
-                        
-                    except requests.exceptions.RequestException as e:
-                        logger.error(f"{LOG_ERROR_TAG} Attempt {attempt}/{REQUEST_RETRIES} failed for KV Store (collection={collection_name}, skip={skip}): {e}")
-                        
-                        if attempt < REQUEST_RETRIES:
-                            delay = RETRY_BACKOFF_SECONDS * attempt
-                            time.sleep(delay)
-                        else:
-                            logger.error(f"{LOG_ERROR_TAG} Giving up on KV Store request after {REQUEST_RETRIES} attempts for '{collection_name}'.")
-                            raise
+        # 1. Apertura dinamica dei file in base al tipo di collection
+        if collection_name == "manual_denylist":
+            file_handles["both"] = open(os.path.join(save_dir, f"{collection_name}_f5_paloalto.csv"), mode="w", newline="", encoding="utf-8")
+            file_handles["f5"] = open(os.path.join(save_dir, f"{collection_name}_f5.csv"), mode="w", newline="", encoding="utf-8")
+            file_handles["pa"] = open(os.path.join(save_dir, f"{collection_name}_paloalto.csv"), mode="w", newline="", encoding="utf-8")
+        else:
+            file_handles["default"] = open(os.path.join(save_dir, f"{collection_name}.csv"), mode="w", newline="", encoding="utf-8")
 
-                if not data:
+        # 2. Scrittura degli header su tutti i file aperti
+        for fh in file_handles.values():
+            fh.write("ip\n")
+
+        # 3. Paginazione e Download
+        while True:
+            params = {"limit": KVSTORE_LIMIT, "skip": skip}
+            data = None
+            
+            for attempt in range(1, REQUEST_RETRIES + 1):
+                try:
+                    response = requests.get(
+                        url,
+                        auth=(splunk_username, splunk_password),
+                        params=params,
+                        verify=False,
+                        timeout=REQUEST_TIMEOUT
+                    )
+                    response.raise_for_status()
+                    data = response.json()
                     break
+                    
+                except requests.exceptions.RequestException as e:
+                    logger.error(f"{LOG_ERROR_TAG} Attempt {attempt}/{REQUEST_RETRIES} failed for KV Store (collection={collection_name}, skip={skip}): {e}")
+                    
+                    if attempt < REQUEST_RETRIES:
+                        delay = RETRY_BACKOFF_SECONDS * attempt
+                        time.sleep(delay)
+                    else:
+                        logger.error(f"{LOG_ERROR_TAG} Giving up on KV Store request after {REQUEST_RETRIES} attempts for '{collection_name}'.")
+                        raise
+
+            if not data:
+                break
+            
+            # 4. Smistamento e scrittura in streaming
+            if collection_name == "manual_denylist":
+                # Smistiamo le entry della denylist in liste separate basandoci sul valore "target"
+                ips_both = [item.get("ip") for item in data if item.get("ip") and item.get("target") == "Both (F5+PaloAlto)"]
+                ips_f5 = [item.get("ip") for item in data if item.get("ip") and item.get("target") == "F5"]
+                ips_pa = [item.get("ip") for item in data if item.get("ip") and item.get("target") == "PaloAlto"]
                 
-                # Stream write items avoiding csv.writer overhead
-                valid_ips = [
-                    item.get("ip") 
-                    for item in data 
-                    if item.get("ip")
-                ]
+                if ips_both:
+                    file_handles["both"].write("\n".join(ips_both) + "\n")
+                if ips_f5:
+                    file_handles["f5"].write("\n".join(ips_f5) + "\n")
+                if ips_pa:
+                    file_handles["pa"].write("\n".join(ips_pa) + "\n")
+            else:
+                # Comportamento standard per allowlist o altre collection
+                valid_ips = [item.get("ip") for item in data if item.get("ip")]
                 if valid_ips:
-                    csv_file.write("\n".join(valid_ips) + "\n")
-                
-                chunk_size = len(data)
-                total_downloaded += chunk_size
-                
-                if chunk_size < KVSTORE_LIMIT:
-                    break
-                
-                skip += KVSTORE_LIMIT
+                    file_handles["default"].write("\n".join(valid_ips) + "\n")
+            
+            chunk_size = len(data)
+            total_downloaded += chunk_size
+            
+            if chunk_size < KVSTORE_LIMIT:
+                break
+            
+            skip += KVSTORE_LIMIT
 
         logger.info(f"{LOG_INFO_TAG} Download complete: {total_downloaded} records saved for list '{collection_name}'.")
 
     except requests.exceptions.RequestException as e:
         logger.error(f"{LOG_ERROR_TAG} Irreversible error retrieving list '{collection_name}' from KV Store: {e}")
+    finally:
+        # Chiusura sicura di tutti i file aperti, anche in caso di eccezioni fatali
+        for fh in file_handles.values():
+            fh.close()
 
 
 def push_allowlist_to_kvstore(
