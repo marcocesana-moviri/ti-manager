@@ -684,7 +684,6 @@ const ManualDeny: React.FC = () => {
                                         value="Both (F5+PaloAlto)"
                                     />
                                     <Select.Option label="F5" value="F5" />
-                                    <Select.Option label="PaloAlto" value="PaloAlto" />
                                 </Select>
                             </div>
 
