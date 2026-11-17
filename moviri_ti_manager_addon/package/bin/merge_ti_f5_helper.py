@@ -62,7 +62,7 @@ def get_lookups_dirs() -> dict[str, str]:
         "base": base_dir,
         "blacklists": os.path.join(base_dir, "blacklists"),
         "whitelists": os.path.join(base_dir, "whitelists"),
-        "master": os.path.join(base_dir, "master"),
+        "master": os.path.join(base_dir, "master"), # Mantenuto per salvare il file .hash
     }
     for dir_path in dirs.values():
         os.makedirs(dir_path, exist_ok=True)      
@@ -106,7 +106,6 @@ def _read_networks_from_files(logger: logging.Logger, filepaths: List[str], list
             continue
         try:
             with open(filepath, mode="r", encoding="utf-8") as f:
-                # OTTIMIZZAZIONE: Lettura in streaming riga per riga per risparmiare RAM
                 for line in f:
                     candidate = line.strip()
                     if not candidate or candidate.lower() in ("ip", "ip_address", "cidr"):
@@ -174,7 +173,6 @@ def _build_merged_ranges(networks: List) -> List[Tuple[int, int]]:
 
 
 def extract_and_filter_networks(logger: logging.Logger, lookups_dirs: dict[str, str]) -> Tuple[Set[str], Set[str]]:
-    # 1. RAW READ
     wl_files = glob.glob(os.path.join(lookups_dirs["whitelists"], "*.csv"))
     wl_v4, wl_v6 = _read_networks_from_files(logger, wl_files, "Whitelist")
     wl_v4.extend(STATIC_PRIVATE_NETWORKS)
@@ -182,7 +180,6 @@ def extract_and_filter_networks(logger: logging.Logger, lookups_dirs: dict[str, 
     bl_files = glob.glob(os.path.join(lookups_dirs["blacklists"], "*.csv"))
     raw_bl_v4, raw_bl_v6 = _read_networks_from_files(logger, bl_files, "Blacklist")
     
-    # 2. INTERVAL CREATION FOR SUBTRACTION
     t_start = time.time()
     wl_v4_ranges = _build_merged_ranges(wl_v4)
     wl_v6_ranges = _build_merged_ranges(wl_v6)
@@ -190,13 +187,11 @@ def extract_and_filter_networks(logger: logging.Logger, lookups_dirs: dict[str, 
     bl_v6_ranges = _build_merged_ranges(raw_bl_v6)
     logger.debug(f"{LOG_DEBUG_TAG} [INTERVALS] Continuous intervals generated and collapsed in {time.time() - t_start:.2f}s")
     
-    # 3. SURGICAL MATHEMATICAL SUBTRACTION (Only for Blacklist)
     t_start = time.time()
     filtered_v4_ranges = _subtract_ranges(bl_v4_ranges, wl_v4_ranges)
     filtered_v6_ranges = _subtract_ranges(bl_v6_ranges, wl_v6_ranges)
     logger.debug(f"{LOG_DEBUG_TAG} [SUBTRACTION] Overlaps removed in {time.time() - t_start:.2f}s")
     
-    # 4. CIDR RECONVERSION
     t_start = time.time()
     final_bl_set = set()
     final_wl_set = set()
@@ -209,7 +204,6 @@ def extract_and_filter_networks(logger: logging.Logger, lookups_dirs: dict[str, 
         for net in ipaddress.summarize_address_range(ipaddress.IPv6Address(start), ipaddress.IPv6Address(end)):
             final_bl_set.add(str(net))
             
-    # OTTIMIZZAZIONE: La Whitelist viene collassata direttamente senza riconversioni matematiche inutili
     for net in ipaddress.collapse_addresses(wl_v4 + wl_v6):
         final_wl_set.add(str(net))
             
@@ -218,36 +212,6 @@ def extract_and_filter_networks(logger: logging.Logger, lookups_dirs: dict[str, 
     )
     
     return final_bl_set, final_wl_set
-
-
-def read_existing_merged(merged_path: str) -> Set[str]:
-    if not os.path.exists(merged_path):
-        return set()
-    existing = set()
-    try:
-        with open(merged_path, mode="r", encoding="utf-8") as f:
-            for line in f:
-                val = line.strip()
-                if val and val.lower() not in ("ip", "ip_address", "cidr"):
-                    existing.add(val)
-    except Exception:
-        pass
-    return existing
-
-
-def write_merged_csv(merged_path: str, ip_set: Set[str], header: str = "ip") -> None:
-    directory = os.path.dirname(merged_path)
-    fd, tmp_path = tempfile.mkstemp(dir=directory, suffix=".tmp")
-    try:
-        with os.fdopen(fd, mode="w", newline="", encoding="utf-8") as f:
-            f.write(f"{header}\n")
-            f.write("\n".join(sorted(ip_set)))
-            f.write("\n")
-        os.replace(tmp_path, merged_path)
-    except Exception:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
-        raise
 
 
 def diff_ip_lists(logger: logging.Logger, new_ips: Set[str], existing_ips: Set[str]) -> Tuple[Set[str], Set[str]]:
@@ -292,6 +256,7 @@ def get_list_from_search_head(
     app_name: str,
     collection_name: str,
 ) -> None:
+    # Usata per scaricare le liste manuali in formato CSV (necessarie per l'estrazione)
     url = f"https://{search_head}:{search_head_port}/servicesNS/nobody/{app_name}/storage/collections/data/{collection_name}"
     skip = 0
     total_downloaded = 0
@@ -314,7 +279,6 @@ def get_list_from_search_head(
             
             for attempt in range(1, REQUEST_RETRIES + 1):
                 try:
-                    # OTTIMIZZAZIONE: Utilizzo di requests.Session per riciclare la connessione TCP
                     response = session.get(url, params=params, timeout=REQUEST_TIMEOUT)
                     response.raise_for_status()
                     data = response.json()
@@ -329,7 +293,6 @@ def get_list_from_search_head(
             if not data:
                 break
             
-            # OTTIMIZZAZIONE: Ciclo for unico invece di tre list comprehension
             if collection_name == "manual_denylist":
                 ips_both, ips_f5 = [], []
                 for item in data:
@@ -361,6 +324,54 @@ def get_list_from_search_head(
     finally:
         for fh in file_handles.values():
             fh.close()
+
+
+def get_remote_state_set(
+    logger: logging.Logger,
+    session: requests.Session,
+    search_head: str,
+    search_head_port: int,
+    app_name: str,
+    collection_name: str,
+) -> Set[str]:
+    # Scarica lo stato remoto e lo restituisce direttamente in memoria (Set)
+    url = f"https://{search_head}:{search_head_port}/servicesNS/nobody/{app_name}/storage/collections/data/{collection_name}"
+    skip = 0
+    existing_ips = set()
+    logger.debug(f"{LOG_DEBUG_TAG} Downloading existing state from KV Store into memory: {url}")
+
+    while True:
+        params = {"limit": KVSTORE_LIMIT, "skip": skip}
+        data = None
+        
+        for attempt in range(1, REQUEST_RETRIES + 1):
+            try:
+                response = session.get(url, params=params, timeout=REQUEST_TIMEOUT)
+                response.raise_for_status()
+                data = response.json()
+                break
+            except requests.exceptions.RequestException as e:
+                logger.error(f"{LOG_ERROR_TAG} Attempt {attempt}/{REQUEST_RETRIES} failed fetching KV Store state (collection={collection_name}, skip={skip}): {e}")
+                if attempt < REQUEST_RETRIES:
+                    time.sleep(RETRY_BACKOFF_SECONDS * attempt)
+                else:
+                    raise
+
+        if not data:
+            break
+        
+        for item in data:
+            ip = item.get("ip")
+            if ip:
+                existing_ips.add(ip)
+        
+        chunk_size = len(data)
+        if chunk_size < KVSTORE_LIMIT:
+            break
+        skip += KVSTORE_LIMIT
+
+    logger.info(f"{LOG_INFO_TAG} Download complete: {len(existing_ips)} records loaded in memory for '{collection_name}'.")
+    return existing_ips
 
 
 def push_allowlist_to_kvstore(
@@ -501,7 +512,6 @@ def update_remote_csv_lookup(
 
 
 def _generate_logs(ip_iterable: Iterable[str], action: str, list_name: str) -> Generator[str, None, None]:
-    # OTTIMIZZAZIONE: Generatore con yield per abbattere l'utilizzo della RAM durante l'ingestione massiva
     base_time = datetime.now(timezone.utc)
     for i, ip in enumerate(ip_iterable):
         event_time = base_time + timedelta(seconds=(i // 50000))
@@ -546,12 +556,10 @@ def _process_lists(
 ) -> None:
     
     lookups_dirs = get_lookups_dirs()
-    merged_path = os.path.join(lookups_dirs["master"], f"{denylist_f5_collection}.csv")
     state_hash_path = os.path.join(lookups_dirs["master"], "state_f5.hash")
 
     logger.info(f"{LOG_INFO_TAG} [SYNC START] Beginning synchronization cycle for {input_name}")
 
-    # OTTIMIZZAZIONE: Inizializzazione della Sessione HTTP condivisa
     with requests.Session() as session:
         session.auth = (splunk_username, splunk_password)
         session.verify = False
@@ -564,7 +572,8 @@ def _process_lists(
         current_state_hash = _calculate_state_hash(lookups_dirs)
         previous_state_hash = _read_previous_state_hash(state_hash_path)
 
-        if current_state_hash == previous_state_hash and os.path.exists(merged_path):
+        # Skip basato esclusivamente sull'hash
+        if current_state_hash == previous_state_hash:
             logger.info(f"{LOG_INFO_TAG} [SYNC SKIP] No changes detected in source feeds. Skipping intensive processing.")
             update_remote_csv_lookup(logger, session, search_head, search_head_port, app_name, denylist_f5_collection)
             return
@@ -575,42 +584,31 @@ def _process_lists(
         new_merged_bl, new_merged_wl = extract_and_filter_networks(logger, lookups_dirs)
         
         # 4. WHITELIST PUSH
-        whitelist_path = os.path.join(lookups_dirs["master"], f"{allowlist_collection}.csv")
         try:
-            write_merged_csv(whitelist_path, new_merged_wl, header="ip")
             push_allowlist_to_kvstore(logger, session, new_merged_wl, search_head, search_head_port, app_name, allowlist_collection)
         except Exception as e:
             logger.error(f"{LOG_ERROR_TAG} [SYNC ERROR] {allowlist_collection} synchronization failed: {e}")
         
         # 5. BLACKLIST DIFF CALCULATION (Self-Healing Mode)
-        # Invece di fidarci del file master locale (che potrebbe essere perso o disallineato),
-        # scarichiamo lo stato REALE del KV Store in questo esatto momento.
-        
-        # Riutilizziamo get_list_from_search_head per salvare il KV store attuale in master/
-        get_list_from_search_head(
+        # Scarica lo stato REALE del KV Store in memoria
+        existing_bl = get_remote_state_set(
             logger, 
-            lookups_dirs["master"], 
+            session, 
             search_head, 
             search_head_port, 
-            session, 
             app_name, 
             denylist_f5_collection
         )
         
-        # Ora il file scaricato rappresenta la vera 'existing_bl' remota
-        remote_state_path = os.path.join(lookups_dirs["master"], f"{denylist_f5_collection}.csv")
-        existing_bl = read_existing_merged(remote_state_path)
-        
         added_ips, removed_ips = diff_ip_lists(logger, new_merged_bl, existing_bl)
 
         # 6. BLACKLIST PUSH
-        if added_ips or removed_ips or not os.path.exists(merged_path):
+        if added_ips or removed_ips or current_state_hash != previous_state_hash:
             try:
                 logger.info(f"{LOG_INFO_TAG} [KVSTORE PUSH] Propagating {denylist_f5_collection} diffs to Splunk...")
                 push_denylist_f5(logger, session, added_ips, removed_ips, search_head, search_head_port, app_name, denylist_f5_collection)
-                write_merged_csv(merged_path, new_merged_bl, header="ip")
 
-                # AUDIT EVENTS tramite yield logs (lazy loading)
+                # AUDIT EVENTS 
                 if added_ips:
                     write_events(index, sourcetype, _generate_logs(added_ips, "added", denylist_f5_collection), input_name, event_writer, logger)
                 if removed_ips:
@@ -624,9 +622,10 @@ def _process_lists(
                 
                 logger.info(f"{LOG_INFO_TAG} [SYNC SUCCESS] Synchronization cycle completed successfully.")
             except Exception as e:
-                logger.error(f"{LOG_ERROR_TAG} [CRITICAL] DenyList F5 Sync failed. Rolling back local state. Error: {e}")
+                logger.error(f"{LOG_ERROR_TAG} [CRITICAL] DenyList F5 Sync failed. Error: {e}")
                 return
                 
+        # Aggiornamento dell'hash solo se tutto è andato a buon fine
         _write_current_state_hash(state_hash_path, current_state_hash)
         logger.debug(f"{LOG_DEBUG_TAG} [STATE] State hash updated successfully.")
 
