@@ -283,6 +283,10 @@ const ManualDeny: React.FC = () => {
         newDurationUnit === 'never' ||
         (!isNaN(Number(newDurationValue)) && Number(newDurationValue) > 0);
 
+    const isAddBtnDisabled =
+        isInputEmpty || !isFormatValid || isDuplicate || isTooMany || !isDurationValid || isLoading;
+    const isBulkBtnDisabled = isLoading || !isDurationValid;
+
     const handleAddIp = async () => {
         if (!isFormatValid || isDuplicate || isTooMany || isInputEmpty || !isDurationValid) return;
 
@@ -500,18 +504,19 @@ const ManualDeny: React.FC = () => {
         flex: 1,
         minWidth: '250px',
         padding: '20px',
-        backgroundColor: '#ffffff',
+        backgroundColor: 'rgba(128, 128, 128, 0.05)', // Sfondo semi-trasparente adattivo
         borderRadius: '8px',
-        border: '1px solid #e1e6eb',
+        border: '1px solid rgba(128, 128, 128, 0.2)', // Bordo adattivo
         boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
         display: 'flex',
         flexDirection: 'column' as const,
         justifyContent: 'center',
+        color: 'inherit', // Eredita automaticamente il testo bianco o nero
     };
 
     const kpiTitleStyle = {
         fontSize: '13px',
-        color: '#656d76',
+        opacity: 0.7, // Opacità al posto del grigio fisso
         textTransform: 'uppercase' as const,
         fontWeight: 600,
         marginBottom: '8px',
@@ -520,7 +525,6 @@ const ManualDeny: React.FC = () => {
     const kpiValueStyle = {
         fontSize: '28px',
         fontWeight: 'bold',
-        color: '#1e252b',
     };
 
     return (
@@ -545,7 +549,7 @@ const ManualDeny: React.FC = () => {
                     <Heading level={3} style={{ marginTop: '20px', color: '#1e252b' }}>
                         Processing Operation...
                     </Heading>
-                    <div style={{ color: '#656d76', marginTop: '10px', fontSize: '14px' }}>
+                    <div style={{ opacity: 0.7, marginTop: '10px', fontSize: '14px' }}>
                         Please wait while the KV Store updates. This may take a few moments for
                         large files.
                     </div>
@@ -563,10 +567,10 @@ const ManualDeny: React.FC = () => {
                     }}
                 >
                     <WaitSpinner size="large" />
-                    <Heading level={3} style={{ marginTop: '25px', color: '#656d76' }}>
+                    <Heading level={3} style={{ marginTop: '25px', opacity: 0.7 }}>
                         Loading Manual Denylist...
                     </Heading>
-                    <div style={{ color: '#8c959f', marginTop: '10px' }}>
+                    <div style={{ opacity: 0.7, marginTop: '10px' }}>
                         Fetching Denied IPs from KV Store. This might take a moment.
                     </div>
                 </div>
@@ -579,12 +583,12 @@ const ManualDeny: React.FC = () => {
                     {error && (
                         <div
                             style={{
-                                backgroundColor: '#fcdcdc',
-                                color: '#d30909',
+                                backgroundColor: 'rgba(211, 9, 9, 0.1)',
+                                color: '#ff4c4c',
+                                border: '1px solid rgba(211, 9, 9, 0.5)',
                                 padding: '12px',
                                 borderRadius: '4px',
                                 marginBottom: '20px',
-                                border: '1px solid #d30909',
                                 fontSize: '14px',
                             }}
                         >
@@ -616,7 +620,7 @@ const ManualDeny: React.FC = () => {
                                     style={{
                                         fontSize: '14px',
                                         fontWeight: 'normal',
-                                        color: '#656d76',
+                                        opacity: 0.7,
                                     }}
                                 >
                                     IPs never expire
@@ -627,10 +631,10 @@ const ManualDeny: React.FC = () => {
 
                     <div
                         style={{
-                            backgroundColor: '#f8f9fa',
+                            backgroundColor: 'rgba(128, 128, 128, 0.05)',
                             padding: '20px',
                             borderRadius: '8px',
-                            border: '1px solid #e1e6eb',
+                            border: '1px solid rgba(128, 128, 128, 0.2)',
                             marginBottom: '30px',
                         }}
                     >
@@ -668,9 +672,7 @@ const ManualDeny: React.FC = () => {
                                     paddingLeft: '15px',
                                 }}
                             >
-                                <span
-                                    style={{ fontSize: '14px', fontWeight: 500, color: '#3C444D' }}
-                                >
+                                <span style={{ fontSize: '14px', fontWeight: 500, opacity: 0.9 }}>
                                     Target:
                                 </span>
                                 <Select
@@ -696,9 +698,7 @@ const ManualDeny: React.FC = () => {
                                     paddingLeft: '15px',
                                 }}
                             >
-                                <span
-                                    style={{ fontSize: '14px', fontWeight: 500, color: '#3C444D' }}
-                                >
+                                <span style={{ fontSize: '14px', fontWeight: 500, opacity: 0.9 }}>
                                     Expiration:
                                 </span>
                                 <Text
@@ -723,31 +723,25 @@ const ManualDeny: React.FC = () => {
                                 </Select>
                             </div>
 
+                            {/* FIX BOTTONE: Cambio dinamico dell'appearance per supportare i temi nativi */}
                             <Button
                                 label="Add IP(s)"
-                                appearance="primary"
+                                appearance={isAddBtnDisabled ? 'secondary' : 'primary'}
                                 onClick={handleAddIp}
-                                disabled={
-                                    isInputEmpty ||
-                                    !isFormatValid ||
-                                    isDuplicate ||
-                                    isTooMany ||
-                                    !isDurationValid ||
-                                    isLoading
-                                }
+                                disabled={isAddBtnDisabled}
                                 style={{ marginLeft: 'auto' }}
                             />
 
                             <div
                                 style={{
-                                    borderLeft: '1px solid #ccc',
+                                    borderLeft: '1px solid rgba(128,128,128,0.3)',
                                     height: '30px',
                                 }}
                             ></div>
 
                             <input
                                 type="file"
-                                accept=".txt,.csv"
+                                accept=".txt"
                                 ref={fileInputRef}
                                 style={{ display: 'none' }}
                                 onChange={handleFileChange}
@@ -757,25 +751,25 @@ const ManualDeny: React.FC = () => {
                                 label="Bulk Upload"
                                 appearance="secondary"
                                 onClick={() => fileInputRef.current?.click()}
-                                disabled={isLoading || !isDurationValid}
+                                disabled={isBulkBtnDisabled}
                             />
                         </div>
 
                         {!isFormatValid && !isTooMany && (
-                            <div style={{ color: '#d30909', fontSize: '12px', marginTop: '8px' }}>
+                            <div style={{ color: '#ff4c4c', fontSize: '12px', marginTop: '8px' }}>
                                 Invalid format. Ensure IPs are valid (e.g., 192.168.1.1 or
                                 10.0.0.0/24).
                             </div>
                         )}
                         {!isDurationValid && (
-                            <div style={{ color: '#d30909', fontSize: '12px', marginTop: '8px' }}>
+                            <div style={{ color: '#ff4c4c', fontSize: '12px', marginTop: '8px' }}>
                                 Please enter a valid number greater than 0 for the expiration.
                             </div>
                         )}
                         {isTooMany && (
                             <div
                                 style={{
-                                    color: '#d30909',
+                                    color: '#ff4c4c',
                                     fontSize: '12px',
                                     marginTop: '8px',
                                     fontWeight: 'bold',
@@ -787,7 +781,7 @@ const ManualDeny: React.FC = () => {
                         {isFormatValid && isDuplicate && (
                             <div
                                 style={{
-                                    color: '#d30909',
+                                    color: '#ff4c4c',
                                     fontSize: '12px',
                                     fontWeight: 'bold',
                                     marginTop: '8px',
@@ -878,7 +872,7 @@ const ManualDeny: React.FC = () => {
 
                             <div style={{ borderLeft: '1px solid #ccc', height: '20px' }}></div>
 
-                            <span style={{ fontSize: '14px', color: '#3C444D', fontWeight: 500 }}>
+                            <span style={{ fontSize: '14px', opacity: 0.9, fontWeight: 500 }}>
                                 Rows per page:
                             </span>
                             <Select
@@ -896,7 +890,7 @@ const ManualDeny: React.FC = () => {
 
                     <div
                         style={{
-                            border: '1px solid #e1e6eb',
+                            border: '1px solid rgba(128, 128, 128, 0.2)',
                             borderRadius: '8px',
                             overflow: 'hidden',
                         }}
@@ -971,7 +965,7 @@ const ManualDeny: React.FC = () => {
                                             style={{
                                                 textAlign: 'center',
                                                 padding: '30px',
-                                                color: '#656d76',
+                                                opacity: 0.7,
                                             }}
                                         >
                                             {isLoading
@@ -1013,10 +1007,17 @@ const ManualDeny: React.FC = () => {
                                             <Table.Cell>
                                                 {formatTimestamp(row.timestamp)}
                                             </Table.Cell>
+                                            {/* FIX COLORE SCADENZA DINAMICO */}
                                             <Table.Cell
                                                 style={{
-                                                    fontWeight: 'bold',
-                                                    color: row.expirydate ? '#656d76' : '#28a745',
+                                                    fontWeight: !row.expirydate ? 'bold' : 'normal',
+                                                    color: !row.expirydate
+                                                        ? '#28a745' // Verde se non c'è scadenza ("Never")
+                                                        : new Date(row.expirydate).getTime() -
+                                                                Date.now() <=
+                                                            86400000
+                                                          ? '#ff4c4c' // Rosso se manca meno di 1 giorno (86400000 ms)
+                                                          : 'inherit', // Colore di default altrimenti
                                                 }}
                                             >
                                                 {row.expirydate
