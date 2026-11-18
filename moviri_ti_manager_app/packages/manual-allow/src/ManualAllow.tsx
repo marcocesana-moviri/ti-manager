@@ -6,16 +6,17 @@ import Select from '@splunk/react-ui/Select';
 import Paginator from '@splunk/react-ui/Paginator';
 import Heading from '@splunk/react-ui/Heading';
 import WaitSpinner from '@splunk/react-ui/WaitSpinner';
+import Modal from '@splunk/react-ui/Modal';
 
 import { defaultFetchInit } from '@splunk/splunk-utils/fetch';
-
 import { StyledContainer, StyledGreeting } from './ManualAllowStyles';
 
 const APP_NAME = 'moviri_ti_manager_app';
 const COLLECTION_NAME = 'manual_allowlist';
-
 const locale = window.location.pathname.split('/')[1] || 'en-US';
 const KV_STORE_URL = `/${locale}/splunkd/__raw/servicesNS/nobody/${APP_NAME}/storage/collections/data/${COLLECTION_NAME}`;
+
+type DurationUnit = 'm' | 'h' | 'd' | 'never';
 
 interface IPRow {
     _key: string;
@@ -55,12 +56,15 @@ const isValidCIDR = (cidr: string): boolean => {
 };
 
 const parseAndNormalizeIps = (input: string): string[] => {
-    return input
+    const rawIps = input
         .split(/[\s,;]+/)
         .map((ip) => ip.trim())
         .filter((ip) => ip.length > 0)
         .map((ip) => (ip.includes('/') ? ip : `${ip}/32`));
+    return Array.from(new Set(rawIps));
 };
+
+const normalizeKey = (cidr: string) => cidr.replace(/\//g, '_');
 
 const formatTimestamp = (isoString?: string) => {
     if (!isoString) return '-';
@@ -68,43 +72,68 @@ const formatTimestamp = (isoString?: string) => {
     return isNaN(date.getTime()) ? '-' : date.toLocaleString();
 };
 
-const calculateExpiryDate = (val: string, unit: string): string => {
+const calculateExpiryDate = (val: string, unit: DurationUnit): string => {
     if (unit === 'never') return '';
     const now = new Date();
     const num = parseInt(val, 10) || 0;
-
     if (num <= 0) return '';
-
     if (unit === 'm') now.setMinutes(now.getMinutes() + num);
     if (unit === 'h') now.setHours(now.getHours() + num);
     if (unit === 'd') now.setDate(now.getDate() + num);
-
     return now.toISOString();
 };
+
+const ipToNumber = (cidr: string): number => {
+    const [ip] = cidr.split('/');
+    if (!ip) return 0;
+    return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+};
+
+function useDebounce<T>(value: T, delay: number): T {
+    const [debouncedValue, setDebouncedValue] = useState<T>(value);
+    useEffect(() => {
+        const handler = setTimeout(() => setDebouncedValue(value), delay);
+        return () => clearTimeout(handler);
+    }, [value, delay]);
+    return debouncedValue;
+}
 
 const ManualAllow: React.FC = () => {
     const [ips, setIps] = useState<IPRow[]>([]);
 
+    // Form States
     const [newIp, setNewIp] = useState<string>('');
     const [newUser, setNewUser] = useState<string>('');
     const [newReason, setNewReason] = useState<string>('');
-
     const [newDurationValue, setNewDurationValue] = useState<string>('24');
-    const [newDurationUnit, setNewDurationUnit] = useState<string>('h');
+    const [newDurationUnit, setNewDurationUnit] = useState<DurationUnit>('h');
 
+    // UI States
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
+    const [successMsg, setSuccessMsg] = useState<string | null>(null);
+    const [modalConfig, setModalConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+    } | null>(null);
 
+    // Table States
     const [searchQuery, setSearchQuery] = useState<string>('');
+    const debouncedSearchQuery = useDebounce(searchQuery, 300);
     const [currentPage, setCurrentPage] = useState<number>(1);
     const [pageSize, setPageSize] = useState<number>(10);
-    const [sortKey, setSortKey] = useState<keyof IPRow | 'none'>('none');
-    const [sortDir, setSortDir] = useState<'asc' | 'desc' | 'none'>('none');
-
+    const [sortState, setSortState] = useState<{
+        key: keyof IPRow | 'none';
+        dir: 'asc' | 'desc' | 'none';
+    }>({ key: 'none', dir: 'none' });
     const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const abortControllerRef = useRef<AbortController | null>(null);
+    const modalReturnFocusRef = useRef<any>(null);
 
     useEffect(() => {
         const fetchCurrentUser = async () => {
@@ -124,16 +153,27 @@ const ManualAllow: React.FC = () => {
 
         fetchCurrentUser();
         fetchIps();
+
+        return () => {
+            if (abortControllerRef.current) abortControllerRef.current.abort();
+        };
     }, []);
 
     useEffect(() => {
         setCurrentPage(1);
         setSelectedKeys([]);
-    }, [searchQuery, ips.length, pageSize, sortKey, sortDir]);
+    }, [debouncedSearchQuery]);
+
+    const showSuccess = (msg: string) => {
+        setSuccessMsg(msg);
+        setTimeout(() => setSuccessMsg(null), 5000);
+    };
 
     const fetchIps = async () => {
         setIsLoading(true);
         setError(null);
+        if (abortControllerRef.current) abortControllerRef.current.abort();
+        abortControllerRef.current = new AbortController();
 
         try {
             let allFetchedIps: IPRow[] = [];
@@ -144,6 +184,7 @@ const ManualAllow: React.FC = () => {
             while (keepFetching) {
                 const response = await splunkFetch(
                     `${KV_STORE_URL}?limit=${CHUNK_LIMIT}&skip=${currentSkip}`,
+                    { signal: abortControllerRef.current.signal },
                 );
 
                 if (!response.ok) {
@@ -156,45 +197,59 @@ const ManualAllow: React.FC = () => {
                 const chunk: IPRow[] = await response.json();
                 allFetchedIps = [...allFetchedIps, ...chunk];
 
-                if (chunk.length < CHUNK_LIMIT) {
-                    keepFetching = false;
-                } else {
-                    currentSkip += CHUNK_LIMIT;
-                }
+                if (chunk.length < CHUNK_LIMIT) keepFetching = false;
+                else currentSkip += CHUNK_LIMIT;
             }
-
             setIps(allFetchedIps);
-        } catch (err: any) {
-            setError(`Network error while fetching data: ${err.message || String(err)}`);
+        } catch (err: unknown) {
+            if (err instanceof Error && err.name === 'AbortError') return;
+            setError(
+                `Network error while fetching data: ${err instanceof Error ? err.message : String(err)}`,
+            );
         } finally {
             setIsLoading(false);
             setIsInitialLoad(false);
         }
     };
 
-    // --- KPI Computations ---
-    const totalActiveIps = ips.length;
-
-    const permanentAllowsCount = ips.filter((row) => !row.expirydate).length;
-
-    const averageDurationStr = useMemo(() => {
+    // --- KPI Computations (Single Pass & Memoized) ---
+    const { totalActiveIps, permanentAllowsCount, averageDurationStr } = useMemo(() => {
+        const now = Date.now();
+        let activeCount = 0;
+        let permanentCount = 0;
         let totalMs = 0;
-        let count = 0;
+        let timedCount = 0;
+
         ips.forEach((row) => {
-            if (row.expirydate && row.timestamp) {
+            const isExpired = row.expirydate && new Date(row.expirydate).getTime() <= now;
+            if (isExpired) return;
+
+            activeCount++;
+            if (!row.expirydate) {
+                permanentCount++;
+            } else if (row.timestamp) {
                 const start = new Date(row.timestamp).getTime();
                 const end = new Date(row.expirydate).getTime();
                 if (!isNaN(start) && !isNaN(end) && end > start) {
                     totalMs += end - start;
-                    count++;
+                    timedCount++;
                 }
             }
         });
-        if (count === 0) return 'N/A';
-        const avgHours = totalMs / count / (1000 * 60 * 60);
-        if (avgHours < 1) return `${(avgHours * 60).toFixed(0)} Mins`;
-        if (avgHours > 24) return `${(avgHours / 24).toFixed(1)} Days`;
-        return `${avgHours.toFixed(1)} Hours`;
+
+        let avgStr = 'N/A';
+        if (timedCount > 0) {
+            const avgHours = totalMs / timedCount / (1000 * 60 * 60);
+            if (avgHours < 1) avgStr = `${(avgHours * 60).toFixed(0)} Mins`;
+            else if (avgHours > 24) avgStr = `${(avgHours / 24).toFixed(1)} Days`;
+            else avgStr = `${avgHours.toFixed(1)} Hours`;
+        }
+
+        return {
+            totalActiveIps: activeCount,
+            permanentAllowsCount: permanentCount,
+            averageDurationStr: avgStr,
+        };
     }, [ips]);
 
     const fileLists = useMemo(() => {
@@ -219,31 +274,52 @@ const ManualAllow: React.FC = () => {
         );
     }, [ips]);
 
-    const filteredIps = ips.filter((row) => {
-        const query = searchQuery.toLowerCase();
-        return (
-            row.ip.toLowerCase().includes(query) ||
-            (row.user && row.user.toLowerCase().includes(query)) ||
-            (row.reason && row.reason.toLowerCase().includes(query)) ||
-            (row.source && row.source.toLowerCase().includes(query))
+    const filteredIps = useMemo(() => {
+        const query = debouncedSearchQuery.toLowerCase();
+        if (!query) return ips;
+        return ips.filter(
+            (row) =>
+                row.ip.toLowerCase().includes(query) ||
+                (row.user && row.user.toLowerCase().includes(query)) ||
+                (row.reason && row.reason.toLowerCase().includes(query)) ||
+                (row.source && row.source.toLowerCase().includes(query)),
         );
-    });
+    }, [ips, debouncedSearchQuery]);
 
-    const sortedIps = [...filteredIps].sort((a, b) => {
-        if (sortDir === 'none' || sortKey === 'none') return 0;
-        const valA = (a[sortKey] || '').toLowerCase();
-        const valB = (b[sortKey] || '').toLowerCase();
+    const sortedIps = useMemo(() => {
+        const { key, dir } = sortState;
+        if (dir === 'none' || key === 'none') return filteredIps;
 
-        if (valA < valB) return sortDir === 'asc' ? -1 : 1;
-        if (valA > valB) return sortDir === 'asc' ? 1 : -1;
-        return 0;
-    });
+        return [...filteredIps].sort((a, b) => {
+            if (key === 'ip') {
+                const numA = ipToNumber(a.ip);
+                const numB = ipToNumber(b.ip);
+                return dir === 'asc' ? numA - numB : numB - numA;
+            }
+
+            if (key === 'expirydate') {
+                const timeA = a.expirydate ? new Date(a.expirydate).getTime() : Infinity;
+                const timeB = b.expirydate ? new Date(b.expirydate).getTime() : Infinity;
+                return dir === 'asc' ? timeA - timeB : timeB - timeA;
+            }
+
+            const valA = (a[key] || '').toLowerCase();
+            const valB = (b[key] || '').toLowerCase();
+            if (valA < valB) return dir === 'asc' ? -1 : 1;
+            if (valA > valB) return dir === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }, [filteredIps, sortState]);
 
     const totalPages = Math.max(1, Math.ceil(sortedIps.length / pageSize));
-    const paginatedIps = sortedIps.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    const paginatedIps = useMemo(
+        () => sortedIps.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+        [sortedIps, currentPage, pageSize],
+    );
 
+    const selectedKeysSet = useMemo(() => new Set(selectedKeys), [selectedKeys]);
     const allPageSelected =
-        paginatedIps.length > 0 && paginatedIps.every((row) => selectedKeys.includes(row._key));
+        paginatedIps.length > 0 && paginatedIps.every((row) => selectedKeysSet.has(row._key));
 
     const handleToggleAll = () => {
         const pageKeys = paginatedIps.map((row) => row._key);
@@ -262,30 +338,35 @@ const ManualAllow: React.FC = () => {
     };
 
     const handleSort = (e: any, { sortKey: newSortKey }: any) => {
-        if (sortKey === newSortKey) {
-            setSortDir((prev) => (prev === 'asc' ? 'desc' : prev === 'desc' ? 'none' : 'asc'));
-            if (sortDir === 'desc') setSortKey('none');
-        } else {
-            setSortKey(newSortKey as keyof IPRow);
-            setSortDir('asc');
-        }
+        setSortState((prev) => {
+            if (prev.key === newSortKey) {
+                const nextDir = prev.dir === 'asc' ? 'desc' : prev.dir === 'desc' ? 'none' : 'asc';
+                return {
+                    key: nextDir === 'none' ? 'none' : (newSortKey as keyof IPRow),
+                    dir: nextDir,
+                };
+            }
+            return { key: newSortKey as keyof IPRow, dir: 'asc' };
+        });
     };
 
+    const existingIpsSet = useMemo(() => new Set(ips.map((row) => row.ip)), [ips]);
     const ipsToAdd = useMemo(() => parseAndNormalizeIps(newIp), [newIp]);
+
     const isInputEmpty = ipsToAdd.length === 0;
     const isTooMany = ipsToAdd.length > 20;
     const isFormatValid = isInputEmpty || ipsToAdd.every(isValidCIDR);
-    const isDuplicate = ipsToAdd.some((ip) => ips.some((row) => row.ip === ip));
+    const isDuplicate = ipsToAdd.some((ip) => existingIpsSet.has(ip));
     const isDurationValid =
         newDurationUnit === 'never' ||
         (!isNaN(Number(newDurationValue)) && Number(newDurationValue) > 0);
 
-    // Variabili per gestire i bottoni
     const isAddBtnDisabled =
         isInputEmpty || !isFormatValid || isDuplicate || isTooMany || !isDurationValid || isLoading;
     const isBulkBtnDisabled = isLoading || !isDurationValid;
 
-    const handleAddIp = async () => {
+    const handleAddIp = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
         if (isAddBtnDisabled) return;
 
         setError(null);
@@ -294,7 +375,7 @@ const ManualAllow: React.FC = () => {
         const expiryIso = calculateExpiryDate(newDurationValue, newDurationUnit);
 
         const payload = ipsToAdd.map((ip) => ({
-            _key: ip,
+            _key: normalizeKey(ip),
             ip: ip,
             user: newUser.trim() || 'Unknown',
             reason: newReason.trim() || 'No reason provided',
@@ -321,9 +402,13 @@ const ManualAllow: React.FC = () => {
 
             setNewIp('');
             setNewReason('');
+            showSuccess(`Successfully added ${payload.length} IP(s).`);
             await fetchIps();
-        } catch (err: any) {
-            setError(`Network error while saving: ${err.message || String(err)}`);
+        } catch (err: unknown) {
+            setError(
+                `Network error while saving: ${err instanceof Error ? err.message : String(err)}`,
+            );
+        } finally {
             setIsLoading(false);
         }
     };
@@ -332,10 +417,13 @@ const ManualAllow: React.FC = () => {
         let hasErrors = false;
         const CHUNK_SIZE = 100;
 
+        const chunks = [];
         for (let i = 0; i < keysToRemove.length; i += CHUNK_SIZE) {
-            const keysChunk = keysToRemove.slice(i, i + CHUNK_SIZE);
-            const queryJson = JSON.stringify({ _key: { $in: keysChunk } });
+            chunks.push(keysToRemove.slice(i, i + CHUNK_SIZE));
+        }
 
+        const deletePromises = chunks.map(async (keysChunk) => {
+            const queryJson = JSON.stringify({ _key: { $in: keysChunk } });
             try {
                 const response = await splunkFetch(
                     `${KV_STORE_URL}?query=${encodeURIComponent(queryJson)}`,
@@ -343,45 +431,64 @@ const ManualAllow: React.FC = () => {
                 );
                 if (!response.ok) {
                     hasErrors = true;
-                    console.error(`Failed to batch delete chunk starting at index ${i}`);
+                    console.error('Failed to batch delete chunk', await response.text());
                 }
             } catch (err) {
                 hasErrors = true;
-                console.error(
-                    `Network error on batch delete for chunk starting at index ${i}:`,
-                    err,
-                );
+                console.error('Network error on batch delete', err);
             }
-        }
+        });
+
+        await Promise.all(deletePromises);
         return hasErrors;
     };
 
-    const handleBulkRemove = async () => {
-        if (selectedKeys.length === 0) return;
-        setError(null);
-        setIsLoading(true);
+    const confirmBulkRemove = () => {
+        setModalConfig({
+            isOpen: true,
+            title: 'Confirm Bulk Deletion',
+            message: `Are you sure you want to remove ${selectedKeys.length} selected IPs? This action cannot be undone.`,
+            onConfirm: async () => {
+                setModalConfig(null);
+                if (selectedKeys.length === 0) return;
+                setError(null);
+                setIsLoading(true);
 
-        const hasErrors = await performBatchDelete(selectedKeys);
-        if (hasErrors)
-            setError('Some selected items could not be deleted successfully. Check console logs.');
+                const hasErrors = await performBatchDelete(selectedKeys);
+                if (hasErrors)
+                    setError(
+                        'Some selected items could not be deleted successfully. Check console logs.',
+                    );
+                else showSuccess(`Successfully deleted ${selectedKeys.length} IPs.`);
 
-        setSelectedKeys([]);
-        await fetchIps();
+                setSelectedKeys([]);
+                await fetchIps();
+            },
+        });
     };
 
-    const handleRemoveList = async (keysToRemove: string[]) => {
-        if (keysToRemove.length === 0) return;
-        setError(null);
-        setIsLoading(true);
+    const confirmRemoveList = (keysToRemove: string[], listName: string) => {
+        setModalConfig({
+            isOpen: true,
+            title: 'Confirm List Removal',
+            message: `Are you sure you want to remove all ${keysToRemove.length} IPs associated with the list "${listName}"?`,
+            onConfirm: async () => {
+                setModalConfig(null);
+                if (keysToRemove.length === 0) return;
+                setError(null);
+                setIsLoading(true);
 
-        const hasErrors = await performBatchDelete(keysToRemove);
-        if (hasErrors)
-            setError(
-                'Some items from the list could not be deleted successfully. Check console logs.',
-            );
+                const hasErrors = await performBatchDelete(keysToRemove);
+                if (hasErrors)
+                    setError(
+                        'Some items from the list could not be deleted successfully. Check console logs.',
+                    );
+                else showSuccess(`Successfully removed list "${listName}".`);
 
-        setSelectedKeys((prev) => prev.filter((k) => !keysToRemove.includes(k)));
-        await fetchIps();
+                setSelectedKeys((prev) => prev.filter((k) => !keysToRemove.includes(k)));
+                await fetchIps();
+            },
+        });
     };
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -392,12 +499,8 @@ const ManualAllow: React.FC = () => {
         const reader = new FileReader();
         reader.onload = async (e) => {
             const text = e.target?.result as string;
-            if (text) {
-                await processBulkIps(text, fileName);
-            }
-            if (fileInputRef.current) {
-                fileInputRef.current.value = '';
-            }
+            if (text) await processBulkIps(text, fileName);
+            if (fileInputRef.current) fileInputRef.current.value = '';
         };
         reader.readAsText(file);
     };
@@ -420,40 +523,45 @@ const ManualAllow: React.FC = () => {
         const now = new Date().toISOString();
         const expiryIso = calculateExpiryDate(newDurationValue, newDurationUnit);
 
-        const parsedData = lines.map((line) => {
-            const parts = line.split(',');
-            const rawIp = parts[0]?.trim() || '';
-            const ip = rawIp.includes('/') ? rawIp : `${rawIp}/32`;
+        const seenInFile = new Set<string>();
+        const uniqueParsedData = [];
+        let invalidCount = 0;
+        let firstInvalid = '';
 
-            return {
-                _key: ip,
-                ip: ip,
-                user: parts[1]?.trim() || newUser.trim() || 'Unknown',
-                reason: parts[2]?.trim() || newReason.trim() || 'Bulk upload',
-                timestamp: now,
-                expirydate: expiryIso,
-                source: fileName,
-            };
-        });
+        for (const line of lines) {
+            const [rawIp = '', rawUser = '', ...reasonParts] = line.split(',');
+            const rawIpTrim = rawIp.trim();
+            const ip = rawIpTrim.includes('/') ? rawIpTrim : `${rawIpTrim}/32`;
 
-        const invalidEntries = parsedData.filter((entry) => !isValidCIDR(entry.ip));
-        if (invalidEntries.length > 0) {
+            if (!isValidCIDR(ip)) {
+                invalidCount++;
+                if (!firstInvalid) firstInvalid = ip;
+                continue;
+            }
+
+            if (!existingIpsSet.has(ip) && !seenInFile.has(ip)) {
+                const user = rawUser.trim() || newUser.trim() || 'Unknown';
+                const reason = reasonParts.join(',').trim() || newReason.trim() || 'Bulk upload';
+
+                uniqueParsedData.push({
+                    _key: normalizeKey(ip),
+                    ip: ip,
+                    user,
+                    reason,
+                    timestamp: now,
+                    expirydate: expiryIso,
+                    source: fileName,
+                });
+                seenInFile.add(ip);
+            }
+        }
+
+        if (invalidCount > 0) {
             setError(
-                `Upload blocked: Found ${invalidEntries.length} invalid CIDR formats (e.g., "${invalidEntries[0].ip}"). Ensure file format is IP,User,Reason.`,
+                `Upload blocked: Found ${invalidCount} invalid CIDR formats (e.g., "${firstInvalid}"). Ensure file format is IP,User,Reason.`,
             );
             setIsLoading(false);
             return;
-        }
-
-        const existingIps = new Set(ips.map((row) => row.ip));
-        const uniqueParsedData = [];
-        const seenInFile = new Set();
-
-        for (const entry of parsedData) {
-            if (!existingIps.has(entry.ip) && !seenInFile.has(entry.ip)) {
-                uniqueParsedData.push(entry);
-                seenInFile.add(entry.ip);
-            }
         }
 
         if (uniqueParsedData.length === 0) {
@@ -469,62 +577,73 @@ const ManualAllow: React.FC = () => {
 
         for (let i = 0; i < uniqueParsedData.length; i += CHUNK_SIZE) {
             const chunk = uniqueParsedData.slice(i, i + CHUNK_SIZE);
-
             try {
                 const response = await splunkFetch(`${KV_STORE_URL}/batch_save`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(chunk),
                 });
-
                 if (!response.ok) {
                     hasErrors = true;
                     console.error(`Failed to save chunk starting at index ${i}`);
                 }
-            } catch (err: any) {
+            } catch (err) {
                 hasErrors = true;
-                console.error(`Network error on chunk starting at index ${i}:`, err);
+                console.error(`Network error on chunk ${i}:`, err);
             }
         }
 
-        if (hasErrors) {
+        if (hasErrors)
             setError(
                 'Some batches were not saved successfully. Check the console logs for details.',
             );
-        }
+        else showSuccess(`Successfully processed bulk upload of ${uniqueParsedData.length} IPs.`);
 
         await fetchIps();
     };
 
-    const kpiCardStyle = {
+    const kpiCardStyle: React.CSSProperties = {
         flex: 1,
         minWidth: '250px',
         padding: '20px',
-        backgroundColor: 'rgba(128, 128, 128, 0.05)',
+        backgroundColor: 'var(--background-color-secondary, rgba(128, 128, 128, 0.05))',
         borderRadius: '8px',
-        border: '1px solid rgba(128, 128, 128, 0.2)',
+        border: '1px solid var(--border-color, rgba(128, 128, 128, 0.2))',
         boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
         display: 'flex',
-        flexDirection: 'column' as const,
+        flexDirection: 'column',
         justifyContent: 'center',
-        color: 'inherit',
+        color: 'var(--text-color, inherit)',
     };
 
-    const kpiTitleStyle = {
-        fontSize: '13px',
-        opacity: 0.7,
-        textTransform: 'uppercase' as const,
-        fontWeight: 600,
-        marginBottom: '8px',
-    };
-
-    const kpiValueStyle = {
-        fontSize: '28px',
-        fontWeight: 'bold',
-    };
+    const nowMs = Date.now();
 
     return (
         <StyledContainer>
+            {modalConfig && (
+                <Modal
+                    onRequestClose={() => setModalConfig(null)}
+                    open={modalConfig.isOpen}
+                    returnFocus={modalReturnFocusRef}
+                    style={{ width: '400px' }}
+                >
+                    <Modal.Header title={modalConfig.title} />
+                    <Modal.Body>{modalConfig.message}</Modal.Body>
+                    <Modal.Footer>
+                        <Button
+                            appearance="secondary"
+                            onClick={() => setModalConfig(null)}
+                            label="Cancel"
+                        />
+                        <Button
+                            appearance="destructive"
+                            onClick={modalConfig.onConfirm}
+                            label="Confirm Delete"
+                        />
+                    </Modal.Footer>
+                </Modal>
+            )}
+
             {isLoading && !isInitialLoad && (
                 <div
                     style={{
@@ -533,7 +652,8 @@ const ManualAllow: React.FC = () => {
                         left: 0,
                         width: '100vw',
                         height: '100vh',
-                        backgroundColor: 'rgba(0, 0, 0, 0.4)', // Scurito per supportare sia dark che light mode
+                        backgroundColor:
+                            'var(--background-color-modal-overlay, rgba(0, 0, 0, 0.4))',
                         zIndex: 9999,
                         display: 'flex',
                         flexDirection: 'column',
@@ -542,12 +662,15 @@ const ManualAllow: React.FC = () => {
                     }}
                 >
                     <WaitSpinner size="large" />
-                    <Heading level={3} style={{ marginTop: '20px', color: '#ffffff' }}>
+                    <Heading
+                        level={3}
+                        style={{ marginTop: '20px', color: 'var(--text-color, #fff)' }}
+                    >
                         Processing Operation...
                     </Heading>
                     <div
                         style={{
-                            color: '#ffffff',
+                            color: 'var(--text-color, #fff)',
                             opacity: 0.8,
                             marginTop: '10px',
                             fontSize: '14px',
@@ -583,6 +706,22 @@ const ManualAllow: React.FC = () => {
                         Threat Intelligence IP Allowlist
                     </StyledGreeting>
 
+                    {successMsg && (
+                        <div
+                            style={{
+                                backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                                color: '#28a745',
+                                border: '1px solid rgba(40, 167, 69, 0.5)',
+                                padding: '12px',
+                                borderRadius: '4px',
+                                marginBottom: '20px',
+                                fontSize: '14px',
+                            }}
+                        >
+                            <strong>Success:</strong> {successMsg}
+                        </div>
+                    )}
+
                     {error && (
                         <div
                             style={{
@@ -608,16 +747,50 @@ const ManualAllow: React.FC = () => {
                         }}
                     >
                         <div style={kpiCardStyle}>
-                            <div style={kpiTitleStyle}>Total Active Allows</div>
-                            <div style={kpiValueStyle}>{totalActiveIps}</div>
+                            <div
+                                style={{
+                                    fontSize: '13px',
+                                    opacity: 0.7,
+                                    textTransform: 'uppercase',
+                                    fontWeight: 600,
+                                    marginBottom: '8px',
+                                }}
+                            >
+                                Total Active Allows
+                            </div>
+                            <div style={{ fontSize: '28px', fontWeight: 'bold' }}>
+                                {totalActiveIps}
+                            </div>
                         </div>
                         <div style={kpiCardStyle}>
-                            <div style={kpiTitleStyle}>Average Allow Duration</div>
-                            <div style={kpiValueStyle}>{averageDurationStr}</div>
+                            <div
+                                style={{
+                                    fontSize: '13px',
+                                    opacity: 0.7,
+                                    textTransform: 'uppercase',
+                                    fontWeight: 600,
+                                    marginBottom: '8px',
+                                }}
+                            >
+                                Average Allow Duration
+                            </div>
+                            <div style={{ fontSize: '28px', fontWeight: 'bold' }}>
+                                {averageDurationStr}
+                            </div>
                         </div>
                         <div style={kpiCardStyle}>
-                            <div style={kpiTitleStyle}>Permanent Allows</div>
-                            <div style={kpiValueStyle}>
+                            <div
+                                style={{
+                                    fontSize: '13px',
+                                    opacity: 0.7,
+                                    textTransform: 'uppercase',
+                                    fontWeight: 600,
+                                    marginBottom: '8px',
+                                }}
+                            >
+                                Permanent Allows
+                            </div>
+                            <div style={{ fontSize: '28px', fontWeight: 'bold' }}>
                                 {permanentAllowsCount}{' '}
                                 <span
                                     style={{
@@ -634,17 +807,19 @@ const ManualAllow: React.FC = () => {
 
                     <div
                         style={{
-                            backgroundColor: 'rgba(128, 128, 128, 0.05)',
+                            backgroundColor:
+                                'var(--background-color-secondary, rgba(128, 128, 128, 0.05))',
                             padding: '20px',
                             borderRadius: '8px',
-                            border: '1px solid rgba(128, 128, 128, 0.2)',
+                            border: '1px solid var(--border-color, rgba(128, 128, 128, 0.2))',
                             marginBottom: '30px',
                         }}
                     >
                         <Heading level={4} style={{ marginTop: 0, marginBottom: '15px' }}>
                             Add to Allowlist
                         </Heading>
-                        <div
+                        <form
+                            onSubmit={handleAddIp}
                             style={{
                                 display: 'flex',
                                 gap: '15px',
@@ -654,14 +829,14 @@ const ManualAllow: React.FC = () => {
                         >
                             <Text
                                 value={newIp}
-                                onChange={(e, { value }: { value: string }) => setNewIp(value)}
+                                onChange={(e: any, { value }: any) => setNewIp(value)}
                                 placeholder="IPs (comma separated, max 20)"
                                 error={!isFormatValid || isDuplicate || isTooMany}
                                 style={{ width: '220px' }}
                             />
                             <Text
                                 value={newReason}
-                                onChange={(e, { value }: { value: string }) => setNewReason(value)}
+                                onChange={(e: any, { value }: any) => setNewReason(value)}
                                 placeholder="Reason (Optional)"
                                 style={{ width: '200px' }}
                             />
@@ -671,7 +846,8 @@ const ManualAllow: React.FC = () => {
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '8px',
-                                    borderLeft: '1px solid rgba(128,128,128,0.3)',
+                                    borderLeft:
+                                        '1px solid var(--border-color, rgba(128,128,128,0.3))',
                                     paddingLeft: '15px',
                                 }}
                             >
@@ -680,7 +856,7 @@ const ManualAllow: React.FC = () => {
                                 </span>
                                 <Text
                                     value={newDurationValue}
-                                    onChange={(e, { value }: { value: string }) =>
+                                    onChange={(e: any, { value }: any) =>
                                         setNewDurationValue(value)
                                     }
                                     disabled={newDurationUnit === 'never' || isLoading}
@@ -689,7 +865,9 @@ const ManualAllow: React.FC = () => {
                                 />
                                 <Select
                                     value={newDurationUnit}
-                                    onChange={(e: any, data: any) => setNewDurationUnit(data.value)}
+                                    onChange={(e: any, data: any) =>
+                                        setNewDurationUnit(data.value as DurationUnit)
+                                    }
                                     style={{ width: '100px' }}
                                     disabled={isLoading}
                                 >
@@ -700,37 +878,36 @@ const ManualAllow: React.FC = () => {
                                 </Select>
                             </div>
 
-                            {/* FIX BOTTONE: Cambio dinamico dell'appearance per supportare i temi nativi */}
                             <Button
+                                type="submit"
                                 label="Add IP(s)"
                                 appearance={isAddBtnDisabled ? 'secondary' : 'primary'}
-                                onClick={handleAddIp}
                                 disabled={isAddBtnDisabled}
                                 style={{ marginLeft: 'auto' }}
                             />
 
                             <div
                                 style={{
-                                    borderLeft: '1px solid rgba(128,128,128,0.3)',
+                                    borderLeft:
+                                        '1px solid var(--border-color, rgba(128,128,128,0.3))',
                                     height: '30px',
                                 }}
                             ></div>
 
                             <input
                                 type="file"
-                                accept=".txt"
+                                accept=".txt,.csv"
                                 ref={fileInputRef}
                                 style={{ display: 'none' }}
                                 onChange={handleFileChange}
                             />
-
                             <Button
                                 label="Bulk Upload"
                                 appearance="secondary"
                                 onClick={() => fileInputRef.current?.click()}
                                 disabled={isBulkBtnDisabled}
                             />
-                        </div>
+                        </form>
 
                         {!isFormatValid && !isTooMany && (
                             <div style={{ color: '#ff4c4c', fontSize: '12px', marginTop: '8px' }}>
@@ -777,12 +954,12 @@ const ManualAllow: React.FC = () => {
                             </Heading>
                             <div
                                 style={{
-                                    border: '1px solid rgba(128, 128, 128, 0.2)',
+                                    border: '1px solid var(--border-color, rgba(128, 128, 128, 0.2))',
                                     borderRadius: '8px',
                                     overflow: 'hidden',
                                 }}
                             >
-                                <Table>
+                                <Table stripeRows>
                                     <Table.Head>
                                         <Table.HeadCell>File Name</Table.HeadCell>
                                         <Table.HeadCell>Subnets Count</Table.HeadCell>
@@ -807,7 +984,12 @@ const ManualAllow: React.FC = () => {
                                                     <Button
                                                         label="Remove Entire List"
                                                         appearance="destructive"
-                                                        onClick={() => handleRemoveList(list.keys)}
+                                                        onClick={() =>
+                                                            confirmRemoveList(
+                                                                list.keys,
+                                                                list.source,
+                                                            )
+                                                        }
                                                         disabled={isLoading}
                                                     />
                                                 </Table.Cell>
@@ -832,7 +1014,7 @@ const ManualAllow: React.FC = () => {
                     >
                         <Text
                             value={searchQuery}
-                            onChange={(e, { value }: { value: string }) => setSearchQuery(value)}
+                            onChange={(e: any, { value }: any) => setSearchQuery(value)}
                             placeholder="Search by IP, User, File, or Reason..."
                             canClear
                             style={{ width: '350px' }}
@@ -843,14 +1025,15 @@ const ManualAllow: React.FC = () => {
                                 <Button
                                     label={`Delete Selected (${selectedKeys.length})`}
                                     appearance="destructive"
-                                    onClick={handleBulkRemove}
+                                    onClick={confirmBulkRemove}
                                     disabled={isLoading}
                                 />
                             )}
 
                             <div
                                 style={{
-                                    borderLeft: '1px solid rgba(128,128,128,0.3)',
+                                    borderLeft:
+                                        '1px solid var(--border-color, rgba(128,128,128,0.3))',
                                     height: '20px',
                                 }}
                             ></div>
@@ -860,7 +1043,7 @@ const ManualAllow: React.FC = () => {
                             </span>
                             <Select
                                 value={pageSize}
-                                onChange={(e: any, data: any) => setPageSize(data.value)}
+                                onChange={(e: any, data: any) => setPageSize(Number(data.value))}
                                 style={{ width: '80px' }}
                             >
                                 <Select.Option label="5" value={5} />
@@ -873,7 +1056,7 @@ const ManualAllow: React.FC = () => {
 
                     <div
                         style={{
-                            border: '1px solid rgba(128, 128, 128, 0.2)',
+                            border: '1px solid var(--border-color, rgba(128, 128, 128, 0.2))',
                             borderRadius: '8px',
                             overflow: 'hidden',
                         }}
@@ -893,42 +1076,44 @@ const ManualAllow: React.FC = () => {
                                 <Table.HeadCell
                                     onSort={handleSort}
                                     sortKey="ip"
-                                    sortDir={sortKey === 'ip' ? sortDir : 'none'}
+                                    sortDir={sortState.key === 'ip' ? sortState.dir : 'none'}
                                 >
                                     IP Address (CIDR)
                                 </Table.HeadCell>
                                 <Table.HeadCell
                                     onSort={handleSort}
                                     sortKey="source"
-                                    sortDir={sortKey === 'source' ? sortDir : 'none'}
+                                    sortDir={sortState.key === 'source' ? sortState.dir : 'none'}
                                 >
                                     Source
                                 </Table.HeadCell>
                                 <Table.HeadCell
                                     onSort={handleSort}
                                     sortKey="user"
-                                    sortDir={sortKey === 'user' ? sortDir : 'none'}
+                                    sortDir={sortState.key === 'user' ? sortState.dir : 'none'}
                                 >
                                     Submitted By
                                 </Table.HeadCell>
                                 <Table.HeadCell
                                     onSort={handleSort}
                                     sortKey="reason"
-                                    sortDir={sortKey === 'reason' ? sortDir : 'none'}
+                                    sortDir={sortState.key === 'reason' ? sortState.dir : 'none'}
                                 >
                                     Reason
                                 </Table.HeadCell>
                                 <Table.HeadCell
                                     onSort={handleSort}
                                     sortKey="timestamp"
-                                    sortDir={sortKey === 'timestamp' ? sortDir : 'none'}
+                                    sortDir={sortState.key === 'timestamp' ? sortState.dir : 'none'}
                                 >
                                     Allowed On
                                 </Table.HeadCell>
                                 <Table.HeadCell
                                     onSort={handleSort}
                                     sortKey="expirydate"
-                                    sortDir={sortKey === 'expirydate' ? sortDir : 'none'}
+                                    sortDir={
+                                        sortState.key === 'expirydate' ? sortState.dir : 'none'
+                                    }
                                 >
                                     Expiry Date
                                 </Table.HeadCell>
@@ -937,7 +1122,7 @@ const ManualAllow: React.FC = () => {
                                 {paginatedIps.length === 0 ? (
                                     <Table.Row>
                                         <Table.Cell
-                                            colSpan={8}
+                                            colSpan={7}
                                             style={{
                                                 textAlign: 'center',
                                                 padding: '30px',
@@ -946,60 +1131,81 @@ const ManualAllow: React.FC = () => {
                                         >
                                             {isLoading
                                                 ? 'Loading data...'
-                                                : searchQuery
+                                                : debouncedSearchQuery
                                                   ? 'No IPs match your search.'
                                                   : 'No IPs found in the allowlist.'}
                                         </Table.Cell>
                                     </Table.Row>
                                 ) : (
-                                    paginatedIps.map((row) => (
-                                        <Table.Row key={row._key}>
-                                            <Table.Cell style={{ textAlign: 'center' }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedKeys.includes(row._key)}
-                                                    onChange={() => handleToggleRow(row._key)}
+                                    paginatedIps.map((row) => {
+                                        const isExpired =
+                                            row.expirydate &&
+                                            new Date(row.expirydate).getTime() <= nowMs;
+                                        const isExpiringSoon =
+                                            row.expirydate &&
+                                            new Date(row.expirydate).getTime() - nowMs <=
+                                                86400000 &&
+                                            !isExpired;
+                                        return (
+                                            <Table.Row
+                                                key={row._key}
+                                                style={{ opacity: isExpired ? 0.6 : 1 }}
+                                            >
+                                                <Table.Cell style={{ textAlign: 'center' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedKeysSet.has(row._key)}
+                                                        onChange={() => handleToggleRow(row._key)}
+                                                        style={{
+                                                            cursor: 'pointer',
+                                                            width: '16px',
+                                                            height: '16px',
+                                                        }}
+                                                        aria-label={`Select ${row.ip}`}
+                                                    />
+                                                </Table.Cell>
+                                                <Table.Cell
                                                     style={{
-                                                        cursor: 'pointer',
-                                                        width: '16px',
-                                                        height: '16px',
+                                                        fontFamily: 'monospace',
+                                                        fontSize: '14px',
+                                                        textDecoration: isExpired
+                                                            ? 'line-through'
+                                                            : 'none',
                                                     }}
-                                                />
-                                            </Table.Cell>
-                                            <Table.Cell
-                                                style={{
-                                                    fontFamily: 'monospace',
-                                                    fontSize: '14px',
-                                                }}
-                                            >
-                                                {row.ip}
-                                            </Table.Cell>
-                                            <Table.Cell>{row.source || 'Manual Entry'}</Table.Cell>
-                                            <Table.Cell>{row.user || 'Unknown'}</Table.Cell>
-                                            <Table.Cell>{row.reason || '-'}</Table.Cell>
-                                            <Table.Cell>
-                                                {formatTimestamp(row.timestamp)}
-                                            </Table.Cell>
-                                            {/* FIX COLORE SCADENZA DINAMICO */}
-                                            {/* FIX COLORE SCADENZA DINAMICO */}
-                                            <Table.Cell
-                                                style={{
-                                                    fontWeight: !row.expirydate ? 'bold' : 'normal',
-                                                    color: !row.expirydate
-                                                        ? '#28a745' // Verde se non c'è scadenza ("Never")
-                                                        : new Date(row.expirydate).getTime() -
-                                                                Date.now() <=
-                                                            86400000
-                                                          ? '#ff4c4c' // Rosso se manca meno di 1 giorno (86400000 ms)
-                                                          : 'inherit', // Colore di default altrimenti
-                                                }}
-                                            >
-                                                {row.expirydate
-                                                    ? formatTimestamp(row.expirydate)
-                                                    : 'Never'}
-                                            </Table.Cell>
-                                        </Table.Row>
-                                    ))
+                                                >
+                                                    {row.ip}
+                                                </Table.Cell>
+                                                <Table.Cell>
+                                                    {row.source || 'Manual Entry'}
+                                                </Table.Cell>
+                                                <Table.Cell>{row.user || 'Unknown'}</Table.Cell>
+                                                <Table.Cell>{row.reason || '-'}</Table.Cell>
+                                                <Table.Cell>
+                                                    {formatTimestamp(row.timestamp)}
+                                                </Table.Cell>
+                                                <Table.Cell
+                                                    style={{
+                                                        fontWeight: !row.expirydate
+                                                            ? 'bold'
+                                                            : 'normal',
+                                                        color: !row.expirydate
+                                                            ? '#28a745'
+                                                            : isExpired
+                                                              ? '#888'
+                                                              : isExpiringSoon
+                                                                ? '#ff4c4c'
+                                                                : 'inherit',
+                                                    }}
+                                                >
+                                                    {row.expirydate
+                                                        ? isExpired
+                                                            ? `Expired (${formatTimestamp(row.expirydate)})`
+                                                            : formatTimestamp(row.expirydate)
+                                                        : 'Never'}
+                                                </Table.Cell>
+                                            </Table.Row>
+                                        );
+                                    })
                                 )}
                             </Table.Body>
                         </Table>
@@ -1012,7 +1218,7 @@ const ManualAllow: React.FC = () => {
                             <Paginator
                                 current={currentPage}
                                 totalPages={totalPages}
-                                onChange={(e, { page }: { page: number }) => setCurrentPage(page)}
+                                onChange={(e: any, { page }: any) => setCurrentPage(page)}
                             />
                         </div>
                     )}
