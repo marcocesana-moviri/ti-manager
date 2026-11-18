@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 import ipaddress
+import json
 import logging
 import os
+import re
+import socket
 import tempfile
 import time
-import re
-from typing import Union
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Set, Union
 
 import requests
 from solnlib import conf_manager, log
@@ -13,151 +18,280 @@ from splunklib import modularinput as smi
 from configs import (
     ADDON_NAME,
     CONF_FILE_NAME,
-    LOG_INFO_TAG,
     LOG_DEBUG_TAG,
     LOG_ERROR_TAG,
+    LOG_INFO_TAG,
     LOG_WARNING_TAG,
-    REQUEST_TIMEOUT,
     REQUEST_RETRIES,
-    RETRY_BACKOFF_SECONDS
+    REQUEST_TIMEOUT,
+    RETRY_BACKOFF_SECONDS,
 )
+
+USER_AGENT = f"{ADDON_NAME}/1.0 (Splunk Modular Input)"
+_INET_PTON = socket.inet_pton
+_AF_INET = socket.AF_INET
+
+
+@dataclass(frozen=True)
+class FeedInputConfig:
+    """Parametri risolti per una singola stanza di acquisizione feed TI."""
+    raw_name: str
+    normalized_name: str
+    list_type: str
+    ti_url: str
+    ti_matching_regex: str
+
+    @classmethod
+    def from_stanza(cls, raw_name: str, stanza: Dict[str, Any]) -> FeedInputConfig:
+        raw_type = str(stanza.get("list_type") or "blacklist").strip().lower()
+        safe_type = "whitelists" if raw_type == "whitelist" else "blacklists"
+        return cls(
+            raw_name=raw_name,
+            normalized_name=raw_name.split("/")[-1],
+            list_type=safe_type,
+            ti_url=(stanza.get("ti_url") or "").strip(),
+            ti_matching_regex=(stanza.get("ti_matching_regex") or "").strip(),
+        )
+
 
 def logger_for_input(input_name: str) -> logging.Logger:
     return log.Logs().get_logger(f"{ADDON_NAME.lower()}_{input_name}")
 
-def get_threat_list(logger: logging.Logger, ti_url: str, ip_regex: Union[str, re.Pattern]) -> list[str]:
-    """
-    Downloads the feed using memory-efficient streaming and regex parsing.
-    Safely handles both string and byte responses.
-    """
-    if isinstance(ip_regex, str):
-        ip_regex = re.compile(ip_regex)
-        
-    logger.info(f"{LOG_INFO_TAG} [FEED DOWNLOAD] Starting fetch for URL: {ti_url}")
-    start_time = time.time()
-    
-    for attempt in range(1, REQUEST_RETRIES + 1):
-        try:
-            # stream=True ensures we don't load huge files entirely in memory
-            response = requests.get(ti_url, timeout=REQUEST_TIMEOUT, stream=True)
-            response.raise_for_status()
-            
-            valid_ips = set()
-            total_lines = 0
-            regex_fails = 0
-            invalid_ips = 0
-            
-            for chunk in response.iter_lines():
-                if not chunk:
-                    continue
-                
-                if isinstance(chunk, bytes):
-                    line = chunk.decode('utf-8', errors='ignore')
-                else:
-                    line = chunk
-                
-                total_lines += 1
-                candidate = line.strip()
-                
-                if candidate.startswith("#"):
-                    continue
-                    
-                match = ip_regex.search(candidate)
-                if not match:
-                    regex_fails += 1
-                    continue
-                    
-                groups = match.groups()   
-                if len(groups) >= 1:
-                    ip = match.group(1)
-                    cidr = match.group(2) if len(groups) >= 2 and match.group(2) else "32"
-                else:
-                    full_match = match.group(0)
-                    if "/" in full_match:
-                        ip, cidr = full_match.split("/", 1)
-                    else:
-                        ip = full_match
-                        cidr = "32"
-                        
-                ip_cidr_str = f"{ip}/{cidr}"
-                
-                try:
-                    # strict=False safely transforms host bits to subnets
-                    network = ipaddress.ip_network(ip_cidr_str, strict=False)
-                    valid_ips.add(str(network))
-                except ValueError:
-                    invalid_ips += 1
-                    
-            elapsed = time.time() - start_time
-            logger.info(
-                f"{LOG_INFO_TAG} [FEED PARSING] Success for {ti_url} (Attempt {attempt}). Extracted {len(valid_ips)} unique IPs in {elapsed:.2f}s. Stats: Total Lines: {total_lines}, Regex Fails: {regex_fails}, Invalid IPs: {invalid_ips}."
-            )
-            return sorted(valid_ips)
-            
-        except requests.RequestException as e:
-            logger.error(
-                f"{LOG_ERROR_TAG} [FEED ERROR] Attempt {attempt}/{REQUEST_RETRIES} failed for {ti_url}: {e}"
-            )
-            
-        if attempt < REQUEST_RETRIES:
-            delay = RETRY_BACKOFF_SECONDS * attempt
-            logger.debug(f"{LOG_DEBUG_TAG} Retrying in {delay}s...")
-            time.sleep(delay)
-            
-    logger.error(f"{LOG_ERROR_TAG} [FEED ABORTED] Max retries reached for {ti_url}.")
-    return []
 
-def get_lookups_dir(list_type: str) -> str:
+def _get_target_paths(list_folder: str, input_name: str) -> tuple[str, str]:
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    safe_type = "whitelists" if str(list_type).strip().lower() == "whitelist" else "blacklists"
-    target_dir = os.path.abspath(os.path.join(script_dir, "..", "lookups", safe_type))
+    target_dir = os.path.abspath(os.path.join(script_dir, "..", "lookups", list_folder))
     os.makedirs(target_dir, exist_ok=True)
-    return target_dir
+    csv_path = os.path.join(target_dir, f"{input_name}.csv")
+    meta_path = os.path.join(target_dir, f".{input_name}.meta.json")
+    return csv_path, meta_path
 
-def write_ip_csv(csv_path: str, ip_list: list[str]) -> None:
-    directory = os.path.dirname(csv_path)
-    fd, tmp_path = tempfile.mkstemp(dir=directory, suffix=".tmp")
-    
+
+def _load_http_cache_meta(meta_path: str, csv_path: str) -> Dict[str, str]:
+    """Carica ETag e Last-Modified solo se il CSV locale esiste ancora su disco."""
+    if not os.path.exists(csv_path) or not os.path.exists(meta_path):
+        return {}
     try:
-        with os.fdopen(fd, mode="w", newline="", encoding="utf-8") as csv_file:
-            csv_file.write("ip\n")
-            if ip_list:
-                csv_file.write("\n".join(ip_list) + "\n")
-        os.replace(tmp_path, csv_path)
+        with open(meta_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _atomic_write_text(target_path: str, content: str) -> None:
+    target_dir = os.path.dirname(target_path)
+    prefix = f".{os.path.basename(target_path)}_"
+    fd, tmp_path = tempfile.mkstemp(dir=target_dir, prefix=prefix, suffix=".tmp")
+    try:
+        with os.fdopen(fd, mode="w", newline="", encoding="utf-8") as tmp_file:
+            tmp_file.write(content)
+            tmp_file.flush()
+            os.fsync(tmp_file.fileno())
+        os.replace(tmp_path, target_path)
     except Exception:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
         raise
 
-def validate_input(definition: smi.ValidationDefinition):
-    return
 
-def _process_ti_updates(
-    logger: logging.Logger,
-    ti_url: str,
-    ti_matching_regex: str,
-    list_type: str,
-    input_name: str
-) -> None:
-    ti_data = get_threat_list(logger, ti_url, ti_matching_regex)
-    if not ti_data:
-        logger.warning(f"{LOG_WARNING_TAG} [FILE SKIP] No data returned for {input_name}. Skipping local file write.")
+def _save_http_cache_meta(meta_path: str, response: requests.Response) -> None:
+    etag = response.headers.get("ETag")
+    last_modified = response.headers.get("Last-Modified")
+    if not etag and not last_modified:
+        if os.path.exists(meta_path):
+            try:
+                os.remove(meta_path)
+            except OSError:
+                pass
         return
 
-    target_dir = get_lookups_dir(list_type)
-    csv_name = f"{input_name}.csv"
-    csv_path = os.path.join(target_dir, csv_name)
+    meta_payload = json.dumps(
+        {"etag": etag or "", "last_modified": last_modified or ""},
+        indent=2,
+        sort_keys=True,
+    ) + "\n"
+    _atomic_write_text(meta_path, meta_payload)
 
-    write_ip_csv(csv_path, ti_data)
-    logger.debug(f"{LOG_DEBUG_TAG} [FILE COMMIT] Successfully wrote {len(ti_data)} IPs to {csv_path}")
 
-def stream_events(inputs: smi.InputDefinition, event_writer: smi.EventWriter):
-    for input_name, input_item in inputs.inputs.items():
-        normalized_input_name = input_name.split("/")[-1]
-        logger = logger_for_input(normalized_input_name)
-        
+def _normalize_ip_or_cidr(raw_value: str) -> Optional[str]:
+    """
+    Normalizza un IP o CIDR in formato canonico (/32 per IPv4 singoli, /128 per IPv6 singoli).
+    Usa socket.inet_pton come fast-path per singoli IPv4.
+    """
+    if "/" not in raw_value and ":" not in raw_value:
         try:
-            session_key = inputs.metadata["session_key"]
+            _INET_PTON(_AF_INET, raw_value)
+            return f"{raw_value}/32"
+        except OSError:
+            pass
+
+    try:
+        return str(ipaddress.ip_network(raw_value, strict=False))
+    except ValueError:
+        return None
+
+
+def _extract_candidate_from_match(match: re.Match[str]) -> str:
+    groups = match.groups()
+    if len(groups) >= 1:
+        ip = match.group(1) or ""
+        cidr = match.group(2) if len(groups) >= 2 else None
+        return f"{ip}/{cidr}" if cidr else ip
+    return match.group(0)
+
+
+def _download_and_parse_feed(
+    logger: logging.Logger,
+    ti_url: str,
+    ip_regex: Union[str, re.Pattern[str]],
+    cache_meta: Dict[str, str],
+) -> tuple[str, Optional[List[str]], Optional[requests.Response]]:
+    """
+    Scarica e analizza il feed TI in streaming con supporto a HTTP 304 Not Modified.
+    Restituisce (status, sorted_ips, response) dove status è:
+    - "not_modified": il feed remoto non è cambiato (HTTP 304)
+    - "updated": download completato con successo (sorted_ips può essere vuoto se il feed è vuoto)
+    - "failed": errore HTTP/rete dopo tutti i tentativi
+    """
+    compiled_regex = re.compile(ip_regex) if isinstance(ip_regex, str) else ip_regex
+
+    headers: Dict[str, str] = {"User-Agent": USER_AGENT}
+    if cache_meta.get("etag"):
+        headers["If-None-Match"] = cache_meta["etag"]
+    if cache_meta.get("last_modified"):
+        headers["If-Modified-Since"] = cache_meta["last_modified"]
+
+    logger.info(f"{LOG_INFO_TAG} [FEED] Starting fetch url={ti_url}")
+    start_time = time.perf_counter()
+
+    for attempt in range(1, REQUEST_RETRIES + 1):
+        try:
+            with requests.get(
+                ti_url,
+                headers=headers,
+                timeout=REQUEST_TIMEOUT,
+                stream=True,
+            ) as response:
+                if response.status_code == 304:
+                    elapsed = time.perf_counter() - start_time
+                    logger.info(
+                        f"{LOG_INFO_TAG} [FEED] Remote feed unchanged (HTTP 304) "
+                        f"url={ti_url} elapsed={elapsed:.2f}s"
+                    )
+                    return "not_modified", None, response
+
+                response.raise_for_status()
+
+                valid_ips: Set[str] = set()
+                total_lines = 0
+                regex_fails = 0
+                invalid_ips = 0
+
+                for raw_line in response.iter_lines():
+                    if not raw_line:
+                        continue
+
+                    line = (
+                        raw_line.decode("utf-8", errors="ignore")
+                        if isinstance(raw_line, bytes)
+                        else raw_line
+                    )
+                    candidate = line.strip()
+                    if not candidate or candidate.startswith("#"):
+                        continue
+
+                    total_lines += 1
+                    match = compiled_regex.search(candidate)
+                    if not match:
+                        regex_fails += 1
+                        continue
+
+                    extracted = _extract_candidate_from_match(match).strip()
+                    normalized = _normalize_ip_or_cidr(extracted)
+                    if normalized is not None:
+                        valid_ips.add(normalized)
+                    else:
+                        invalid_ips += 1
+
+                elapsed = time.perf_counter() - start_time
+                logger.info(
+                    f"{LOG_INFO_TAG} [FEED] Parsed feed url={ti_url} attempt={attempt} "
+                    f"unique_ips={len(valid_ips)} total_lines={total_lines} "
+                    f"regex_fails={regex_fails} invalid_ips={invalid_ips} elapsed={elapsed:.2f}s"
+                )
+                return "updated", sorted(valid_ips), response
+
+        except requests.RequestException as exc:
+            if attempt < REQUEST_RETRIES:
+                delay = RETRY_BACKOFF_SECONDS * attempt
+                logger.warning(
+                    f"{LOG_WARNING_TAG} [FEED] Retryable download error url={ti_url} "
+                    f"attempt={attempt}/{REQUEST_RETRIES} backoff={delay}s error={exc!r}"
+                )
+                time.sleep(delay)
+            else:
+                logger.error(
+                    f"{LOG_ERROR_TAG} [FEED] Download failed permanently url={ti_url} "
+                    f"attempts={REQUEST_RETRIES} error={exc!r}"
+                )
+
+    return "failed", None, None
+
+
+def _process_ti_feed(logger: logging.Logger, config: FeedInputConfig) -> None:
+    csv_path, meta_path = _get_target_paths(config.list_type, config.normalized_name)
+    cache_meta = _load_http_cache_meta(meta_path, csv_path)
+
+    status, ip_list, response = _download_and_parse_feed(
+        logger=logger,
+        ti_url=config.ti_url,
+        ip_regex=config.ti_matching_regex,
+        cache_meta=cache_meta,
+    )
+
+    if status in ("failed", "not_modified") or ip_list is None:
+        return
+
+    new_content = "ip\n" + ("\n".join(ip_list) + "\n" if ip_list else "")
+
+    # Evita di alterare il timestamp (mtime) del CSV se i record estratti sono identici
+    content_changed = True
+    if os.path.exists(csv_path):
+        try:
+            with open(csv_path, "r", encoding="utf-8") as existing_file:
+                if existing_file.read() == new_content:
+                    content_changed = False
+        except OSError:
+            pass
+
+    if content_changed:
+        _atomic_write_text(csv_path, new_content)
+        logger.info(
+            f"{LOG_INFO_TAG} [FILE] Updated local lookup file={csv_path} records={len(ip_list)}"
+        )
+    else:
+        logger.info(
+            f"{LOG_INFO_TAG} [FILE] Extracted records identical to local CSV; preserving mtime "
+            f"file={csv_path} records={len(ip_list)}"
+        )
+
+    if response is not None:
+        _save_http_cache_meta(meta_path, response)
+
+
+def validate_input(definition: smi.ValidationDefinition) -> None:
+    return
+
+
+def stream_events(inputs: smi.InputDefinition, event_writer: smi.EventWriter) -> None:
+    session_key = inputs.metadata["session_key"]
+
+    for raw_input_name, stanza in inputs.inputs.items():
+        config = FeedInputConfig.from_stanza(raw_input_name, stanza)
+        logger = logger_for_input(config.normalized_name)
+
+        try:
             log_level = conf_manager.get_log_level(
                 logger=logger,
                 session_key=session_key,
@@ -165,17 +299,28 @@ def stream_events(inputs: smi.InputDefinition, event_writer: smi.EventWriter):
                 conf_name=CONF_FILE_NAME,
             )
             logger.setLevel(log_level)
-            log.modular_input_start(logger, normalized_input_name)
+            log.modular_input_start(logger, config.normalized_name)
 
-            list_type = input_item.get("list_type", "blacklist")
-            ti_url = input_item.get("ti_url")
-            ti_matching_regex = input_item.get("ti_matching_regex")
+            if not config.ti_url or not config.ti_matching_regex:
+                logger.error(
+                    f"{LOG_ERROR_TAG} [CONFIG] Missing required parameters input={config.normalized_name} "
+                    f"ti_url={config.ti_url!r} has_regex={bool(config.ti_matching_regex)}"
+                )
+                continue
 
-            logger.info(f"{LOG_INFO_TAG} Starting TI processing for input: {normalized_input_name} (Type: {list_type})")
+            _process_ti_feed(logger, config)
 
-            _process_ti_updates(logger, ti_url, ti_matching_regex, list_type, normalized_input_name)
-
-        except Exception as e:
-            log.log_exception(logger, e, LOG_ERROR_TAG, msg_before=f"Exception in input {normalized_input_name}: {e}")
+        except re.error as regex_err:
+            logger.error(
+                f"{LOG_ERROR_TAG} [CONFIG] Invalid regex pattern input={config.normalized_name} "
+                f"regex={config.ti_matching_regex!r} error={regex_err!r}"
+            )
+        except Exception as exc:
+            log.log_exception(
+                logger,
+                exc,
+                LOG_ERROR_TAG,
+                msg_before=f"[FEED] Unhandled exception in input={config.normalized_name}: {exc}",
+            )
         finally:
-            log.modular_input_end(logger, normalized_input_name)
+            log.modular_input_end(logger, config.normalized_name)
