@@ -17,7 +17,7 @@ REQUIREMENTS_DEV_FILE="${PROJECT_ROOT}/requirements-dev.txt"
 
 # TA Directories & Configuration
 TA_NAME="moviri_ti_manager_addon"
-TA_VERSION="1.0.0"
+TA_VERSION="2.0.0"
 TA_ROOT="${PROJECT_ROOT}/${TA_NAME}"
 TA_PACKAGE_DIR="${TA_ROOT}/package"
 TA_PACKAGE_BIN_DIR="${TA_PACKAGE_DIR}/bin"
