@@ -1,1709 +1,810 @@
 <dashboard version="2" theme="dark">
-    <label>TI Manager - Monitor</label>
-    <description>Dashboard to monitor the health status of the TI manager mechanism.</description>
+    <label>Moviri TI Manager - Overview &amp; IP Lookup</label>
+    <description>Operational health monitoring, external feed status, and high-scale IP/CIDR search across F5 (3M+ subnets), Palo Alto, and Manual KV Store collections.</description>
     <definition><![CDATA[
 {
-        "visualizations": {
-                "viz_7HDqfu78": {
-                        "type": "splunk.singlevalue",
-                        "dataSources": {
-                                "primary": "ds_6VB1iDef"
-                        },
-                        "title": "Added IPs",
-                        "description": "Last 24h",
-                        "options": {
-                                "unit": "+",
-                                "trendDisplay": "percent",
-                                "sparklineNullValueDisplay": "zero",
-                                "trendColor": "> trendValue | rangeValue(trendColorEditorConfig)",
-                                "majorColor": "#53a051",
-                                "backgroundColor": "transparent",
-                                "unitPosition": "before"
-                        },
-                        "context": {
-                                "trendColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 0
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 0
-                                        }
-                                ]
-                        }
-                },
-                "viz_L6kvQ8OT": {
-                        "type": "splunk.singlevalue",
-                        "dataSources": {
-                                "primary": "ds_uXVdW7sf"
-                        },
-                        "title": "Removed IPs",
-                        "description": "Last 24h",
-                        "options": {
-                                "unit": "-",
-                                "trendDisplay": "percent",
-                                "sparklineNullValueDisplay": "zero",
-                                "trendColor": "> trendValue | rangeValue(trendColorEditorConfig)",
-                                "majorColor": "#dc4e41",
-                                "backgroundColor": "transparent",
-                                "unitPosition": "before"
-                        },
-                        "context": {
-                                "trendColorEditorConfig": [
-                                        {
-                                                "value": "#118832",
-                                                "to": 0
-                                        },
-                                        {
-                                                "value": "#D41F1F",
-                                                "from": 0
-                                        }
-                                ]
-                        }
-                },
-                "viz_ZaigbFem": {
-                        "type": "splunk.line",
-                        "options": {
-                                "nullValueDisplay": "connect",
-                                "dataValuesDisplay": "minmax",
-                                "backgroundColor": "transparent",
-                                "legendDisplay": "off",
-                                "yAxisTitleVisibility": "hide",
-                                "y2AxisTitleVisibility": "hide",
-                                "y2AxisAbbreviation": "off",
-                                "showRoundedY2AxisLabels": false,
-                                "xAxisMajorTickVisibility": "hide",
-                                "yAxisLabelVisibility": "hide",
-                                "showYAxisExtendedRange": false,
-                                "showYMajorGridLines": false,
-                                "yAxisMajorTickVisibility": "hide",
-                                "yAxisMinorTickVisibility": "hide",
-                                "y2AxisLabelVisibility": "hide",
-                                "y2AxisMajorTickVisibility": "hide",
-                                "y2AxisMinorTickVisibility": "hide",
-                                "xAxisTitleVisibility": "hide",
-                                "xAxisLineVisibility": "show",
-                                "xAxisMaxLabelParts": 1
-                        },
-                        "dataSources": {
-                                "primary": "ds_eE0WGnxC"
-                        },
-                        "containerOptions": {
-                                "description": {
-                                        "color": "transparent"
-                                }
-                        },
-                        "showProgressBar": true,
-                        "showLastUpdated": false,
-                        "title": ""
-                },
-                "viz_M6wzLmIX": {
-                        "type": "splunk.markdown",
-                        "options": {
-                                "markdown": "# Global KPI"
-                        }
-                },
-                "viz_w6XHwsKA": {
-                        "type": "splunk.singlevalue",
-                        "dataSources": {
-                                "primary": "ds_6cZxfNI1"
-                        },
-                        "title": "Blacklisted Subnets",
-                        "description": "Compressed",
-                        "options": {
-                                "backgroundColor": "transparent",
-                                "unit": ""
-                        }
-                },
-                "viz_PkzgRbAj": {
-                        "type": "splunk.singlevalue",
-                        "dataSources": {
-                                "primary": "ds_nMS356jK"
-                        },
-                        "title": "Whitelisted Subnets",
-                        "description": "Compressed",
-                        "options": {
-                                "backgroundColor": "transparent"
-                        }
-                },
-                "viz_Jz3OKMUF": {
-                        "type": "splunk.column",
-                        "dataSources": {
-                                "primary": "ds_SIHNzgyx"
-                        },
-                        "containerOptions": {},
-                        "showProgressBar": true,
-                        "showLastUpdated": false,
-                        "options": {
-                                "dataValuesDisplay": "minmax",
-                                "backgroundColor": "transparent",
-                                "legendDisplay": "off",
-                                "xAxisTitleVisibility": "hide",
-                                "xAxisMajorTickVisibility": "hide",
-                                "yAxisTitleVisibility": "hide",
-                                "yAxisLabelVisibility": "hide",
-                                "yAxisMajorTickVisibility": "hide",
-                                "yAxisMinorTickVisibility": "hide",
-                                "showYMajorGridLines": false
-                        },
-                        "title": ""
-                },
-                "viz_SNXo3tas": {
-                        "type": "splunk.markdown",
-                        "options": {
-                                "markdown": "**Subnets by CIDR**\n"
-                        }
-                },
-                "viz_1IpbfeRR": {
-                        "type": "splunk.markdown",
-                        "options": {
-                                "markdown": "# Feed status"
-                        }
-                },
-                "viz_qnNuUW7k": {
-                        "type": "splunk.markdown",
-                        "options": {
-                                "markdown": "FireHOL Level 1",
-                                "fontFamily": "Splunk Platform Mono",
-                                "fontSize": "extraLarge"
-                        }
-                },
-                "viz_wbL05Iay": {
-                        "type": "splunk.ellipse",
-                        "options": {
-                                "strokeWidth": 0,
-                                "fillColor": "> fillDataValue | rangeValue(fillColorEditorConfig)"
-                        },
-                        "context": {
-                                "fillColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 100
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 100
-                                        }
-                                ],
-                                "fillDataValue": "> primary | seriesByType(\"number\") | lastPoint()"
-                        },
-                        "dataSources": {
-                                "primary": "ds_uuh1cISY"
-                        }
-                },
-                "viz_HnWZ0nIK": {
-                        "type": "splunk.markdown",
-                        "options": {
-                                "markdown": "FireHOL Level 2",
-                                "fontFamily": "Splunk Platform Mono",
-                                "fontSize": "extraLarge"
-                        }
-                },
-                "viz_6bYZdKLW": {
-                        "type": "splunk.ellipse",
-                        "options": {
-                                "strokeWidth": 0,
-                                "fillColor": "> fillDataValue | rangeValue(fillColorEditorConfig)"
-                        },
-                        "context": {
-                                "fillColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 100
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 100
-                                        }
-                                ],
-                                "fillDataValue": "> primary | seriesByType(\"number\") | lastPoint()"
-                        },
-                        "dataSources": {
-                                "primary": "ds_qyhNaTJP"
-                        }
-                },
-                "viz_sGtkIu4J": {
-                        "type": "splunk.markdown",
-                        "options": {
-                                "markdown": "FireHOL Level 3",
-                                "fontFamily": "Splunk Platform Mono",
-                                "fontSize": "extraLarge"
-                        }
-                },
-                "viz_0vXsuvMi": {
-                        "type": "splunk.ellipse",
-                        "options": {
-                                "strokeWidth": 0,
-                                "fillColor": "> fillDataValue | rangeValue(fillColorEditorConfig)"
-                        },
-                        "context": {
-                                "fillColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 100
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 100
-                                        }
-                                ],
-                                "fillDataValue": "> primary | seriesByType(\"number\") | lastPoint()"
-                        },
-                        "dataSources": {
-                                "primary": "ds_Widgp2Pf"
-                        }
-                },
-                "viz_ruq7fppE": {
-                        "type": "splunk.markdown",
-                        "options": {
-                                "markdown": "FireHOL Anonymous",
-                                "fontFamily": "Splunk Platform Mono",
-                                "fontSize": "extraLarge"
-                        }
-                },
-                "viz_GdV8UXdm": {
-                        "type": "splunk.ellipse",
-                        "options": {
-                                "strokeWidth": 0,
-                                "fillColor": "> fillDataValue | rangeValue(fillColorEditorConfig)"
-                        },
-                        "context": {
-                                "fillColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 100
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 100
-                                        }
-                                ],
-                                "fillDataValue": "> primary | seriesByType(\"number\") | lastPoint()"
-                        },
-                        "dataSources": {
-                                "primary": "ds_1Ia6sw8T"
-                        }
-                },
-                "viz_ugziVR6R": {
-                        "type": "splunk.markdown",
-                        "options": {
-                                "markdown": "DShield Block",
-                                "fontFamily": "Splunk Platform Mono",
-                                "fontSize": "extraLarge"
-                        }
-                },
-                "viz_N1OLd3BR": {
-                        "type": "splunk.ellipse",
-                        "options": {
-                                "strokeWidth": 0,
-                                "fillColor": "> fillDataValue | rangeValue(fillColorEditorConfig)"
-                        },
-                        "context": {
-                                "fillColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 100
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 100
-                                        }
-                                ],
-                                "fillDataValue": "> primary | seriesByType(\"number\") | lastPoint()"
-                        },
-                        "dataSources": {
-                                "primary": "ds_R341ki69"
-                        }
-                },
-                "viz_rlimanPs": {
-                        "type": "splunk.markdown",
-                        "options": {
-                                "markdown": "Spamhaus DROP",
-                                "fontFamily": "Splunk Platform Mono",
-                                "fontSize": "extraLarge"
-                        }
-                },
-                "viz_DKsCb7GH": {
-                        "type": "splunk.ellipse",
-                        "options": {
-                                "strokeWidth": 0,
-                                "fillColor": "> fillDataValue | rangeValue(fillColorEditorConfig)"
-                        },
-                        "context": {
-                                "fillColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 100
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 100
-                                        }
-                                ],
-                                "fillDataValue": "> primary | seriesByType(\"number\") | lastPoint()"
-                        },
-                        "dataSources": {
-                                "primary": "ds_hT1J0zg0"
-                        }
-                },
-                "viz_FQEgoUpw": {
-                        "type": "splunk.markdown",
-                        "options": {
-                                "markdown": "StopForumSpam 7d",
-                                "fontFamily": "Splunk Platform Mono",
-                                "fontSize": "extraLarge"
-                        }
-                },
-                "viz_QrsXkvKV": {
-                        "type": "splunk.ellipse",
-                        "options": {
-                                "strokeWidth": 0,
-                                "fillColor": "> fillDataValue | rangeValue(fillColorEditorConfig)"
-                        },
-                        "context": {
-                                "fillColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 100
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 100
-                                        }
-                                ],
-                                "fillDataValue": "> primary | seriesByType(\"number\") | lastPoint()"
-                        },
-                        "dataSources": {
-                                "primary": "ds_U3Odzaqx"
-                        }
-                },
-                "viz_M12SIfMI": {
-                        "type": "splunk.markdown",
-                        "options": {
-                                "markdown": "StopForumSpam 30d",
-                                "fontFamily": "Splunk Platform Mono",
-                                "fontSize": "extraLarge"
-                        }
-                },
-                "viz_MtCYETi6": {
-                        "type": "splunk.ellipse",
-                        "options": {
-                                "strokeWidth": 0,
-                                "fillColor": "> fillDataValue | rangeValue(fillColorEditorConfig)"
-                        },
-                        "context": {
-                                "fillColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 100
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 100
-                                        }
-                                ],
-                                "fillDataValue": "> primary | seriesByType(\"number\") | lastPoint()"
-                        },
-                        "dataSources": {
-                                "primary": "ds_wim97jVI"
-                        }
-                },
-                "viz_UcUbJSU6": {
-                        "type": "splunk.markdown",
-                        "options": {
-                                "markdown": "Tor Exits 30d",
-                                "fontFamily": "Splunk Platform Mono",
-                                "fontSize": "extraLarge"
-                        }
-                },
-                "viz_hFs3pqW3": {
-                        "type": "splunk.ellipse",
-                        "options": {
-                                "strokeWidth": 0,
-                                "fillColor": "> fillDataValue | rangeValue(fillColorEditorConfig)"
-                        },
-                        "context": {
-                                "fillColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 100
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 100
-                                        }
-                                ],
-                                "fillDataValue": "> primary | seriesByType(\"number\") | lastPoint()"
-                        },
-                        "dataSources": {
-                                "primary": "ds_S34bhkPL"
-                        }
-                },
-                "viz_g1LTYjWp": {
-                        "type": "splunk.markdown",
-                        "options": {
-                                "markdown": "# Last sync"
-                        }
-                },
-                "viz_zNqFDlIg": {
-                        "type": "splunk.markdown",
-                        "options": {
-                                "markdown": "# Total subnets\n"
-                        }
-                },
-                "viz_io4KbyfX": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('num_ip')",
-                                "unit": "",
-                                "majorColor": "> majorValue | rangeValue(majorColorEditorConfig)",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_uuh1cISY"
-                        },
-                        "context": {
-                                "majorColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 1
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 1
-                                        }
-                                ]
-                        }
-                },
-                "viz_9xArECiN": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('num_ip')",
-                                "unit": "",
-                                "majorColor": "> majorValue | rangeValue(majorColorEditorConfig)",
-                                "backgroundColor": "transparent",
-                                "trendDisplay": "off"
-                        },
-                        "dataSources": {
-                                "primary": "ds_qyhNaTJP"
-                        },
-                        "context": {
-                                "majorColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 1
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 1
-                                        }
-                                ]
-                        }
-                },
-                "viz_8BbkRZ6p": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('num_ip')",
-                                "unit": "",
-                                "majorColor": "> majorValue | rangeValue(majorColorEditorConfig)",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_Widgp2Pf"
-                        },
-                        "context": {
-                                "majorColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 1
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 1
-                                        }
-                                ]
-                        }
-                },
-                "viz_v9pWTOni": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('num_ip')",
-                                "unit": "",
-                                "majorColor": "> majorValue | rangeValue(majorColorEditorConfig)",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_1Ia6sw8T"
-                        },
-                        "context": {
-                                "majorColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 1
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 1
-                                        }
-                                ]
-                        }
-                },
-                "viz_Okrz3Fqc": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('num_ip')",
-                                "unit": "",
-                                "majorColor": "> majorValue | rangeValue(majorColorEditorConfig)",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_R341ki69"
-                        },
-                        "context": {
-                                "majorColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 1
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 1
-                                        }
-                                ]
-                        }
-                },
-                "viz_ZSZmiYU7": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('num_ip')",
-                                "unit": "",
-                                "majorColor": "> majorValue | rangeValue(majorColorEditorConfig)",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_hT1J0zg0"
-                        },
-                        "context": {
-                                "majorColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 1
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 1
-                                        }
-                                ]
-                        }
-                },
-                "viz_uVDOwDBs": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('num_ip')",
-                                "unit": "",
-                                "majorColor": "> majorValue | rangeValue(majorColorEditorConfig)",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_U3Odzaqx"
-                        },
-                        "context": {
-                                "majorColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 1
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 1
-                                        }
-                                ]
-                        }
-                },
-                "viz_zGvRIjSX": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('num_ip')",
-                                "unit": "",
-                                "majorColor": "> majorValue | rangeValue(majorColorEditorConfig)",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_wim97jVI"
-                        },
-                        "context": {
-                                "majorColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 1
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 1
-                                        }
-                                ]
-                        }
-                },
-                "viz_39w1JzGf": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('num_ip')",
-                                "unit": "",
-                                "majorColor": "> majorValue | rangeValue(majorColorEditorConfig)",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_S34bhkPL"
-                        },
-                        "context": {
-                                "majorColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 1
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 1
-                                        }
-                                ]
-                        }
-                },
-                "viz_utIf2YNt": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('last_sync')",
-                                "unit": "",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_uuh1cISY"
-                        }
-                },
-                "viz_CLtN3QpC": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('last_sync')",
-                                "unit": "",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_qyhNaTJP"
-                        }
-                },
-                "viz_DaA7yzTd": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('last_sync')",
-                                "unit": "",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_Widgp2Pf"
-                        }
-                },
-                "viz_gQ3CQFsq": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('last_sync')",
-                                "unit": "",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_1Ia6sw8T"
-                        }
-                },
-                "viz_yiKrEV8N": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('last_sync')",
-                                "unit": "",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_R341ki69"
-                        }
-                },
-                "viz_ZcRgEdgr": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('last_sync')",
-                                "unit": "",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_hT1J0zg0"
-                        }
-                },
-                "viz_xNzwQ4ro": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('last_sync')",
-                                "unit": "",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_U3Odzaqx"
-                        }
-                },
-                "viz_xbghAnXB": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('last_sync')",
-                                "unit": "",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_wim97jVI"
-                        }
-                },
-                "viz_o7QmizXP": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('last_sync')",
-                                "unit": "",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_S34bhkPL"
-                        }
-                },
-                "viz_vrSQmPK9": {
-                        "type": "abslayout.line"
-                },
-                "viz_rTXu1M0a": {
-                        "type": "abslayout.line"
-                },
-                "viz_A9WLPA4o": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "unit": "",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_6YFdR5oc"
-                        },
-                        "description": "",
-                        "title": ""
-                },
-                "viz_mVoYC9zK": {
-                        "type": "splunk.singlevalue",
-                        "options": {
-                                "unit": "%",
-                                "majorValue": "> sparklineValues | lastPoint()",
-                                "trendValue": "> sparklineValues | delta(-2)",
-                                "sparklineValues": "> primary | seriesByName('compression_ratio')",
-                                "numberPrecision": 2,
-                                "majorColor": "> majorValue | rangeValue(majorColorEditorConfig)",
-                                "backgroundColor": "transparent"
-                        },
-                        "dataSources": {
-                                "primary": "ds_6YFdR5oc"
-                        },
-                        "context": {
-                                "majorColorEditorConfig": [
-                                        {
-                                                "value": "#D41F1F",
-                                                "to": 10
-                                        },
-                                        {
-                                                "value": "#CBA700",
-                                                "from": 10,
-                                                "to": 15
-                                        },
-                                        {
-                                                "value": "#118832",
-                                                "from": 15
-                                        }
-                                ]
-                        }
-                },
-                "viz_QHR7PYhS": {
-                        "type": "splunk.markdown",
-                        "options": {
-                                "markdown": "#### Uncompressed"
-                        }
-                },
-                "viz_GvXR2xF5": {
-                        "type": "splunk.markdown",
-                        "options": {
-                                "markdown": "#### Compression ratio"
-                        }
-                },
-                "viz_RTEhHfiS": {
-                        "type": "splunk.map",
-                        "dataSources": {
-                                "primary": "ds_Rp2aTwpC"
-                        },
-                        "title": "",
-                        "options": {
-                                "backgroundColor": "transparent",
-                                "layers": [
-                                        {
-                                                "seriesColors": [
-                                                        "#dc4e41"
-                                                ],
-                                                "type": "bubble"
-                                        }
-                                ]
-                        },
-                        "containerOptions": {},
-                        "showProgressBar": true,
-                        "showLastUpdated": false
-                },
-                "viz_aWXkUxjw": {
-                        "type": "splunk.markdown",
-                        "options": {
-                                "markdown": "# Threat activity from blocked IPs\n"
-                        }
-                }
-        },
-        "dataSources": {
-                "ds_6VB1iDef": {
-                        "type": "ds.search",
-                        "options": {
-                                "query": "index=ip_blocking sourcetype=\"ti_manager:diff\" action=\"added\"\n| stats count",
-                                "queryParameters": {
-                                        "earliest": "-24h@h",
-                                        "latest": "now"
-                                }
-                        },
-                        "name": "single_added"
-                },
-                "ds_uXVdW7sf": {
-                        "type": "ds.search",
-                        "options": {
-                                "query": "index=ip_blocking sourcetype=\"ti_manager:diff\" action=\"removed\"\n| stats count",
-                                "queryParameters": {
-                                        "earliest": "-24h@h",
-                                        "latest": "now"
-                                }
-                        },
-                        "name": "single_removed"
-                },
-                "ds_eE0WGnxC": {
-                        "type": "ds.search",
-                        "options": {
-                                "query": "index=_internal source=\"/opt/splunk/var/log/splunk/moviri_ti_manager_addon_master_merger.log\" \"[TI MANAGER INFO] [CIDR REBUILD]\"\n| rex field=_raw \"Blacklist:\\s+(?<blacklisted>\\d+)\\s+subnet\\(s\\),\\s+Whitelist:\\s+(?<whitelisted>\\d+)\"\n| timechart latest(blacklisted) as blacklisted span=1h",
-                                "queryParameters": {
-                                        "earliest": "$global_time.earliest$",
-                                        "latest": "$global_time.latest$"
-                                }
-                        },
-                        "name": "timechart_blacklisted"
-                },
-                "ds_6cZxfNI1": {
-                        "type": "ds.search",
-                        "options": {
-                                "query": "index=_internal source=\"/opt/splunk/var/log/splunk/moviri_ti_manager_addon_master_merger.log\" \"[TI MANAGER INFO] [CIDR REBUILD]\"\n| rex field=_raw \"Blacklist:\\s+(?<blacklisted>\\d+)\\s+subnet\\(s\\),\\s+Whitelist:\\s+(?<whitelisted>\\d+)\"\n| stats latest(blacklisted)",
-                                "queryParameters": {
-                                        "earliest": "$global_time.earliest$",
-                                        "latest": "$global_time.latest$"
-                                }
-                        },
-                        "name": "single_blacklisted"
-                },
-                "ds_nMS356jK": {
-                        "type": "ds.search",
-                        "options": {
-                                "query": "index=_internal source=\"/opt/splunk/var/log/splunk/moviri_ti_manager_addon_master_merger.log\" \"[TI MANAGER INFO] [CIDR REBUILD]\"\n| rex field=_raw \"Blacklist:\\s+(?<blacklisted>\\d+)\\s+subnet\\(s\\),\\s+Whitelist:\\s+(?<whitelisted>\\d+)\"\n| stats latest(whitelisted)",
-                                "queryParameters": {
-                                        "earliest": "$global_time.earliest$",
-                                        "latest": "$global_time.latest$"
-                                }
-                        },
-                        "name": "single_whitelisted"
-                },
-                "ds_SIHNzgyx": {
-                        "type": "ds.search",
-                        "options": {
-                                "query": "| inputlookup master_threatlist \n| rex field=ip \"\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\/(?<cidr>\\d+)\"\n| stats count by cidr\n| sort 0 - count\n| head 5",
-                                "queryParameters": {
-                                        "earliest": "-15m",
-                                        "latest": "now"
-                                }
-                        },
-                        "name": "donut_cidr"
-                },
-                "ds_TnajQ31q": {
-                        "type": "ds.search",
-                        "options": {
-                                "query": "index=_internal \"[TI MANAGER INFO] [FEED PARSING]\" OR \"[TI MANAGER ERROR] [FEED ABORTED]\" OR \"[TI MANAGER INFO] [FEED DOWNLOAD]\"\n| rex field=_raw \"(?<feed_url>https:\\/\\/[^\\s]+)\" \n| rex field=_raw \"Extracted\\s+(?<num_ip>\\d+)\"\n| transaction feed_url maxspan=10m\n| dedup feed_url\n| eval count=if(match(_raw, \"Success for\"), \"100\", \"0\")\n| eval last_sync=_time\n| eval last_sync=strftime(last_sync, \"%Y-%m-%d %H:%M:%S\")\n| table last_sync feed_url count num_ip",
-                                "queryParameters": {
-                                        "earliest": "$global_time.earliest$",
-                                        "latest": "$global_time.latest$"
-                                }
-                        },
-                        "name": "feed_main_search"
-                },
-                "ds_uuh1cISY": {
-                        "type": "ds.chain",
-                        "options": {
-                                "extend": "ds_TnajQ31q",
-                                "query": "| search feed_url=\"https://iplists.firehol.org/files/firehol_level1.netset\""
-                        },
-                        "name": "firehol_level1"
-                },
-                "ds_qyhNaTJP": {
-                        "type": "ds.chain",
-                        "options": {
-                                "extend": "ds_TnajQ31q",
-                                "query": "| search feed_url=\"https://iplists.firehol.org/files/firehol_level2.netset\""
-                        },
-                        "name": "firehol_level2"
-                },
-                "ds_Widgp2Pf": {
-                        "type": "ds.chain",
-                        "options": {
-                                "extend": "ds_TnajQ31q",
-                                "query": "| search feed_url=\"https://iplists.firehol.org/files/firehol_level3.netset\""
-                        },
-                        "name": "firehol_level3"
-                },
-                "ds_1Ia6sw8T": {
-                        "type": "ds.chain",
-                        "options": {
-                                "extend": "ds_TnajQ31q",
-                                "query": "| search feed_url=\"https://iplists.firehol.org/files/firehol_anonymous.netset\""
-                        },
-                        "name": "firehol_anonymous"
-                },
-                "ds_R341ki69": {
-                        "type": "ds.chain",
-                        "options": {
-                                "extend": "ds_TnajQ31q",
-                                "query": "| search feed_url=\"https://www.dshield.org/block.txt\""
-                        },
-                        "name": "dshield_block"
-                },
-                "ds_hT1J0zg0": {
-                        "type": "ds.chain",
-                        "options": {
-                                "extend": "ds_TnajQ31q",
-                                "query": "| search feed_url=\"https://www.spamhaus.org/drop/drop.txt\""
-                        },
-                        "name": "spamhaus_drop"
-                },
-                "ds_U3Odzaqx": {
-                        "type": "ds.chain",
-                        "options": {
-                                "extend": "ds_TnajQ31q",
-                                "query": "| search feed_url=\"https://iplists.firehol.org/files/stopforumspam_7d.ipset\""
-                        },
-                        "name": "stopforumspam_7d"
-                },
-                "ds_wim97jVI": {
-                        "type": "ds.chain",
-                        "options": {
-                                "extend": "ds_TnajQ31q",
-                                "query": "| search feed_url=\"https://iplists.firehol.org/files/stopforumspam_30d.ipset\""
-                        },
-                        "name": "stopforumspam_30d"
-                },
-                "ds_S34bhkPL": {
-                        "type": "ds.chain",
-                        "options": {
-                                "extend": "ds_TnajQ31q",
-                                "query": "| search feed_url=\"https://iplists.firehol.org/files/tor_exits_30d.ipset\""
-                        },
-                        "name": "tor_exits_30d"
-                },
-                "ds_6YFdR5oc": {
-                        "type": "ds.search",
-                        "options": {
-                                "query": "index=_internal source=\"*master_merger*\" \"[TI MANAGER DEBUG] [I/O] Read 10 Blacklist files\" OR \"[TI MANAGER INFO] [CIDR REBUILD]\"\n| rex field=_raw \"Loaded\\s+(?<starting_subnets>\\d+)\"\n| rex field=_raw \"Blacklist:\\s+(?<ending_subnets>\\d+).*Whitelist:\\s+(?<ending_whites>\\d+).*Elapsed:\\s+(?<elapsed>[^s]+)\"\n| stats latest(starting_subnets) as starting_subnets latest(ending_subnets) as ending_subnets\n| eval compression_ratio=round(((starting_subnets-ending_subnets)/starting_subnets)*100, 2)",
-                                "queryParameters": {
-                                        "earliest": "$global_time.earliest$",
-                                        "latest": "$global_time.latest$"
-                                }
-                        },
-                        "name": "compression"
-                },
-                "ds_sm7bF5vR": {
-                        "type": "ds.search",
-                        "options": {
-                                "query": "index=threat_activity threat_key=\"master_threatlist_csv\" search_name=\"threatmatch://src\" OR search_name=\"threatmatch://dest\" \n| eval risk_object=if(search_name=\"threatmatch://src\", src, dest) \n| dedup risk_object \n| iplocation risk_object \n| table _time search_name risk_object Country Region City lat lon threat_collection_key threat_match_field orig_sourcetype",
-                                "queryParameters": {
-                                        "earliest": "$global_time.earliest$",
-                                        "latest": "$global_time.latest$"
-                                }
-                        },
-                        "name": "threat_activity"
-                },
-                "ds_Rp2aTwpC": {
-                        "type": "ds.chain",
-                        "options": {
-                                "extend": "ds_sm7bF5vR",
-                                "query": "| geostats count by risk_object"
-                        },
-                        "name": "threat_activity_geo"
-                },
-                "ds_f55gIayB": {
-                        "type": "ds.chain",
-                        "options": {
-                                "extend": "ds_sm7bF5vR",
-                                "query": "| table _time search_name risk_object Country City threat_collection_key threat_match_field orig_sourcetype"
-                        },
-                        "name": "Search_1"
-                }
-        },
+        "title": "Moviri TI Manager - Overview & IP Lookup",
+        "description": "Operational health monitoring, external feed status, and high-scale IP/CIDR search across F5 (3M+ subnets), Palo Alto, and Manual KV Store collections.",
         "defaults": {
                 "dataSources": {
                         "ds.search": {
                                 "options": {
                                         "queryParameters": {
-                                                "latest": "$global_time.latest$",
-                                                "earliest": "$global_time.earliest$"
+                                                "earliest": "$global_time.earliest$",
+                                                "latest": "$global_time.latest$"
                                         }
                                 }
-                        },
-                        "ds.spl2": {
-                                "options": {
-                                        "queryParameters": {
-                                                "latest": "$global_time.latest$",
-                                                "earliest": "$global_time.earliest$"
-                                        }
-                                }
-                        }
-                },
-                "visualizations": {
-                        "global": {
-                                "showProgressBar": true
                         }
                 }
         },
         "inputs": {
-                "input_global_trp": {
+                "input_time_range": {
                         "type": "input.timerange",
+                        "title": "Monitoring Time Range",
                         "options": {
-                                "token": "global_time",
-                                "defaultValue": "-7d@h,now"
+                                "defaultValue": "-24h@h,now",
+                                "token": "global_time"
+                        }
+                },
+                "input_deny_ip_search": {
+                        "type": "input.text",
+                        "title": "Search IP or CIDR (leave empty for 500-row sample; enter IP/CIDR for indexed lookup)",
+                        "options": {
+                                "defaultValue": "",
+                                "token": "deny_ip_query"
+                        }
+                },
+                "input_deny_target_filter": {
+                        "type": "input.dropdown",
+                        "title": "Target Firewall / Scope",
+                        "options": {
+                                "items": [
+                                        {
+                                                "label": "All Targets (F5 + Palo Alto + Manual)",
+                                                "value": "all"
+                                        },
+                                        {
+                                                "label": "F5 Enforced Only (denylist_f5)",
+                                                "value": "f5"
+                                        },
+                                        {
+                                                "label": "Palo Alto Enforced Only (denylist_paloalto)",
+                                                "value": "paloalto"
+                                        },
+                                        {
+                                                "label": "Manual Denylist Only (manual_denylist)",
+                                                "value": "manual"
+                                        }
+                                ],
+                                "defaultValue": "all",
+                                "token": "deny_target_filter"
+                        }
+                },
+                "input_allow_ip_search": {
+                        "type": "input.text",
+                        "title": "Search Whitelisted IP or CIDR (exact or subnet match)",
+                        "options": {
+                                "defaultValue": "",
+                                "token": "allow_ip_query"
+                        }
+                }
+        },
+        "dataSources": {
+                "ds_kpi_f5_count": {
+                        "type": "ds.search",
+                        "name": "KPI F5 Denylist Count",
+                        "options": {
+                                "query": "| inputlookup denylist_f5 | stats count"
+                        }
+                },
+                "ds_kpi_pa_count": {
+                        "type": "ds.search",
+                        "name": "KPI Palo Alto Denylist Count",
+                        "options": {
+                                "query": "| inputlookup denylist_paloalto | stats count"
+                        }
+                },
+                "ds_kpi_allow_count": {
+                        "type": "ds.search",
+                        "name": "KPI Enforced Allowlist Count",
+                        "options": {
+                                "query": "| inputlookup allowlist | stats count"
+                        }
+                },
+                "ds_kpi_manual_counts": {
+                        "type": "ds.search",
+                        "name": "KPI Manual Entries Count",
+                        "options": {
+                                "query": "| inputlookup manual_denylist | stats count as manual_deny | appendcols [| inputlookup manual_allowlist | stats count as manual_allow] | eval summary=manual_deny.\" Deny / \".manual_allow.\" Allow\" | fields summary"
+                        }
+                },
+                "ds_kpi_errors": {
+                        "type": "ds.search",
+                        "name": "KPI Errors Count",
+                        "options": {
+                                "query": "index=_internal \"[TI MANAGER ERROR]\" | stats count"
+                        }
+                },
+                "ds_kpi_warnings": {
+                        "type": "ds.search",
+                        "name": "KPI Warnings Count",
+                        "options": {
+                                "query": "index=_internal \"[TI MANAGER WARNING]\" | stats count"
+                        }
+                },
+                "ds_chart_audit_activity": {
+                        "type": "ds.search",
+                        "name": "Audit Events Over Time",
+                        "options": {
+                                "query": "index=* sourcetype IN (\"ti_manager:diff:f5\", \"ti_manager:diff:paloalto\") | eval series=list_name.\" - \".action | timechart count by series"
+                        }
+                },
+                "ds_chart_sync_duration": {
+                        "type": "ds.search",
+                        "name": "Sync Cycle Duration Over Time",
+                        "options": {
+                                "query": "index=_internal \"[TI MANAGER INFO]\" \"[SYNC] Cycle completed successfully\" | rex field=_raw \"target=(?<target>\\w+).*?total_elapsed=(?<elapsed>[\\d\\.]+)s\" | timechart max(elapsed) as \"Max Duration (s)\" by target"
+                        }
+                },
+                "ds_table_feeds_status": {
+                        "type": "ds.search",
+                        "name": "External Threat Feeds Health",
+                        "options": {
+                                "query": "index=_internal (\"[TI MANAGER INFO] [FEED]\" OR \"[TI MANAGER ERROR] [FEED]\") | rex field=_raw \"\\[(?<severity>INFO|ERROR)\\] \\[FEED\\] (?<msg>.*?)\\s+url=(?<url>\\S+)\" | rex field=_raw \"unique_ips=(?<unique_ips>\\d+)\" | rex field=_raw \"regex_fails=(?<regex_fails>\\d+)\\s+invalid_ips=(?<invalid_ips>\\d+)\" | rex field=_raw \"elapsed=(?<elapsed>[\\d\\.]+)s\" | eval status=case(severity==\"ERROR\", \"ERROR\", like(msg, \"%304%\"), \"OK (304 Cached)\", 1==1, \"OK (Updated)\") | stats latest(_time) as last_run, latest(status) as Status, latest(unique_ips) as \"Unique CIDRs\", latest(regex_fails) as \"Regex Skips\", latest(invalid_ips) as \"Invalid IPs\", latest(elapsed) as \"Duration (s)\" by url | eval \"Last Check\"=strftime(last_run, \"%Y-%m-%d %H:%M:%S\") | table \"Last Check\", Status, url, \"Unique CIDRs\", \"Regex Skips\", \"Invalid IPs\", \"Duration (s)\" | sort Status, url"
+                        }
+                },
+                "ds_table_recent_errors": {
+                        "type": "ds.search",
+                        "name": "Recent Errors and Warnings",
+                        "options": {
+                                "query": "index=_internal (\"[TI MANAGER ERROR]\" OR \"[TI MANAGER WARNING]\") | rex field=_raw \"file=(?<source_file>[^:\\s]+:\\w+:\\d+)\\s+\\|\\s+\\[TI MANAGER (?<level>ERROR|WARNING)\\]\\s+(?<message>.*)\" | eval Time=strftime(_time, \"%Y-%m-%d %H:%M:%S\") | table Time, level, source_file, message | sort - Time | head 100"
+                        }
+                },
+                "ds_deny_enforced_base": {
+                        "type": "ds.search",
+                        "name": "Enforced Denylists Search (Index-Pushdown)",
+                        "options": {
+                                "query": "| inputlookup denylist_f5 [| makeresults | eval q=trim(\"$deny_ip_query$\") | eval search=case(q==\"\", \"max=500\", match(q, \"^(\\d{1,3})\\.\") AND NOT match(q, \"/[0-7]$\"), \"where ip=\\\"\".replace(q, \"^(\\d{1,3})\\..*\", \"\\1.*\") .\"\\\"\", match(q, \"/[0-7]$\"), \"\", 1==1, \"where ip=\\\"*\".q.\"*\") | return $search] | eval target=\"F5\" | append [| inputlookup denylist_paloalto [| makeresults | eval q=trim(\"$deny_ip_query$\") | eval search=case(q==\"\", \"max=500\", match(q, \"^(\\d{1,3})\\.\") AND NOT match(q, \"/[0-7]$\"), \"where ip=\\\"\".replace(q, \"^(\\d{1,3})\\..*\", \"\\1.*\") .\"\\\"\", match(q, \"/[0-7]$\"), \"\", 1==1, \"where ip=\\\"*\".q.\"*\") | return $search] | eval target=\"Palo Alto\"] | eval q=trim(\"$deny_ip_query$\"), scope=\"$deny_target_filter$\" | where (scope==\"all\" OR (scope==\"f5\" AND target==\"F5\") OR (scope==\"paloalto\" AND target==\"Palo Alto\")) | where (q==\"\" OR like(ip, \"%\".q.\"%\") OR coalesce(cidrmatch(ip, q), false()) OR coalesce(cidrmatch(q, ip), false())) | stats values(target) as targets by ip | eval \"F5 Status\"=if(mvfind(targets, \"F5\")>=0, \"BLOCKED\", \"-\"), \"Palo Alto Status\"=if(mvfind(targets, \"Palo Alto\")>=0, \"BLOCKED\", \"-\") | rename ip as \"Enforced Subnet (CIDR)\" | table \"Enforced Subnet (CIDR)\", \"F5 Status\", \"Palo Alto Status\""
+                        }
+                },
+                "ds_deny_enforced_kpi": {
+                        "type": "ds.chain",
+                        "name": "Enforced Denylists KPI",
+                        "options": {
+                                "extend": "ds_deny_enforced_base",
+                                "query": "| stats count(eval('F5 Status'==\"BLOCKED\")) as f5_matches, count(eval('Palo Alto Status'==\"BLOCKED\")) as pa_matches | eval q=trim(\"$deny_ip_query$\"), summary=if(q==\"\", \"Sample: \".f5_matches.\" F5 / \".pa_matches.\" PA (Enter IP to search all 3M)\", f5_matches.\" F5 / \".pa_matches.\" Palo Alto\") | fields summary"
+                        }
+                },
+                "ds_deny_enforced_table": {
+                        "type": "ds.chain",
+                        "name": "Enforced Denylists Table",
+                        "options": {
+                                "extend": "ds_deny_enforced_base",
+                                "query": "| sort \"Enforced Subnet (CIDR)\" | head 1000"
+                        }
+                },
+                "ds_deny_manual_base": {
+                        "type": "ds.search",
+                        "name": "Manual Denylist Search",
+                        "options": {
+                                "query": "| inputlookup manual_denylist | eval q=trim(\"$deny_ip_query$\"), scope=\"$deny_target_filter$\" | where (scope!=\"paloalto\" OR target==\"Both (F5+PaloAlto)\") | where (q==\"\" OR like(ip, \"%\".q.\"%\") OR like(lower(coalesce(reason, \"\")), \"%\".lower(q).\"%\") OR like(lower(coalesce(user, \"\")), \"%\".lower(q).\"%\") OR like(lower(coalesce(source, \"\")), \"%\".lower(q).\"%\") OR coalesce(cidrmatch(ip, q), false()) OR coalesce(cidrmatch(q, ip), false())) | eval exp_epoch=strptime(expirydate, \"%Y-%m-%dT%H:%M:%S.%3NZ\"), Status=case(isnull(expirydate) OR expirydate==\"\", \"Active (Permanent)\", exp_epoch > now(), \"Active (Timed)\", 1==1, \"Expired (Still in KV Store)\"), Source=coalesce(source, \"Manual Entry\"), Expiry=if(isnull(expirydate) OR expirydate==\"\", \"Never\", expirydate) | table ip, target, Status, user, reason, Source, timestamp, Expiry | sort - timestamp"
+                        }
+                },
+                "ds_deny_manual_kpi": {
+                        "type": "ds.chain",
+                        "name": "Manual Denylist KPI",
+                        "options": {
+                                "extend": "ds_deny_manual_base",
+                                "query": "| stats count"
+                        }
+                },
+                "ds_deny_manual_table": {
+                        "type": "ds.chain",
+                        "name": "Manual Denylist Table",
+                        "options": {
+                                "extend": "ds_deny_manual_base",
+                                "query": "| rename ip as \"IP / CIDR\", target as \"Target\", user as \"Submitted By\", reason as \"Reason\", timestamp as \"Added On\", Expiry as \"Expiry Date\" | head 1000"
+                        }
+                },
+                "ds_allow_enforced_base": {
+                        "type": "ds.search",
+                        "name": "Enforced Allowlist Search",
+                        "options": {
+                                "query": "| inputlookup allowlist | eval q=trim(\"$allow_ip_query$\") | where (q==\"\" OR like(ip, \"%\".q.\"%\") OR coalesce(cidrmatch(ip, q), false()) OR coalesce(cidrmatch(q, ip), false())) | eval Classification=if(cidrmatch(\"10.0.0.0/8\", ip) OR cidrmatch(\"172.16.0.0/12\", ip) OR cidrmatch(\"192.168.0.0/16\", ip) OR cidrmatch(\"127.0.0.0/8\", ip) OR cidrmatch(\"169.254.0.0/16\", ip) OR cidrmatch(\"100.64.0.0/10\", ip), \"Protected Private Range (Static)\", \"Manual Exception / Whitelist Feed\") | rename ip as \"Allowed Subnet (CIDR)\" | table \"Allowed Subnet (CIDR)\", Classification"
+                        }
+                },
+                "ds_allow_enforced_kpi": {
+                        "type": "ds.chain",
+                        "name": "Enforced Allowlist KPI",
+                        "options": {
+                                "extend": "ds_allow_enforced_base",
+                                "query": "| stats count"
+                        }
+                },
+                "ds_allow_enforced_table": {
+                        "type": "ds.chain",
+                        "name": "Enforced Allowlist Table",
+                        "options": {
+                                "extend": "ds_allow_enforced_base",
+                                "query": "| sort \"Allowed Subnet (CIDR)\" | head 1000"
+                        }
+                },
+                "ds_allow_manual_base": {
+                        "type": "ds.search",
+                        "name": "Manual Allowlist Search",
+                        "options": {
+                                "query": "| inputlookup manual_allowlist | eval q=trim(\"$allow_ip_query$\") | where (q==\"\" OR like(ip, \"%\".q.\"%\") OR like(lower(coalesce(reason, \"\")), \"%\".lower(q).\"%\") OR like(lower(coalesce(user, \"\")), \"%\".lower(q).\"%\") OR like(lower(coalesce(source, \"\")), \"%\".lower(q).\"%\") OR coalesce(cidrmatch(ip, q), false()) OR coalesce(cidrmatch(q, ip), false())) | eval exp_epoch=strptime(expirydate, \"%Y-%m-%dT%H:%M:%S.%3NZ\"), Status=case(isnull(expirydate) OR expirydate==\"\", \"Active (Permanent)\", exp_epoch > now(), \"Active (Timed)\", 1==1, \"Expired (Still in KV Store)\"), Source=coalesce(source, \"Manual Entry\"), Expiry=if(isnull(expirydate) OR expirydate==\"\", \"Never\", expirydate) | table ip, Status, user, reason, Source, timestamp, Expiry | sort - timestamp"
+                        }
+                },
+                "ds_allow_manual_kpi": {
+                        "type": "ds.chain",
+                        "name": "Manual Allowlist KPI",
+                        "options": {
+                                "extend": "ds_allow_manual_base",
+                                "query": "| stats count"
+                        }
+                },
+                "ds_allow_manual_table": {
+                        "type": "ds.chain",
+                        "name": "Manual Allowlist Table",
+                        "options": {
+                                "extend": "ds_allow_manual_base",
+                                "query": "| rename ip as \"IP / CIDR\", user as \"Submitted By\", reason as \"Reason\", timestamp as \"Allowed On\", Expiry as \"Expiry Date\" | head 1000"
+                        }
+                }
+        },
+        "visualizations": {
+                "viz_kpi_f5": {
+                        "type": "splunk.singlevalue",
+                        "title": "F5 Blocked Subnets",
+                        "dataSources": {
+                                "primary": "ds_kpi_f5_count"
                         },
-                        "title": "Intervallo temporale globale"
+                        "options": {
+                                "majorColor": "#dc4e41",
+                                "sparklineDisplay": "off"
+                        }
+                },
+                "viz_kpi_pa": {
+                        "type": "splunk.singlevalue",
+                        "title": "Palo Alto Blocked Subnets",
+                        "dataSources": {
+                                "primary": "ds_kpi_pa_count"
+                        },
+                        "options": {
+                                "majorColor": "#f1813f",
+                                "sparklineDisplay": "off"
+                        }
+                },
+                "viz_kpi_allow": {
+                        "type": "splunk.singlevalue",
+                        "title": "Enforced Allowlist Subnets",
+                        "dataSources": {
+                                "primary": "ds_kpi_allow_count"
+                        },
+                        "options": {
+                                "majorColor": "#53a051",
+                                "sparklineDisplay": "off"
+                        }
+                },
+                "viz_kpi_manual": {
+                        "type": "splunk.singlevalue",
+                        "title": "Manual KV Store Records",
+                        "dataSources": {
+                                "primary": "ds_kpi_manual_counts"
+                        },
+                        "options": {
+                                "majorColor": "#006d9c",
+                                "sparklineDisplay": "off"
+                        }
+                },
+                "viz_kpi_errors": {
+                        "type": "splunk.singlevalue",
+                        "title": "TI Manager Errors",
+                        "dataSources": {
+                                "primary": "ds_kpi_errors"
+                        },
+                        "options": {
+                                "majorColor": "> majorValue | rangeValue(majorColorEditorConfig)",
+                                "majorColorEditorConfig": [
+                                        {
+                                                "to": 1,
+                                                "value": "#53a051"
+                                        },
+                                        {
+                                                "from": 1,
+                                                "value": "#dc4e41"
+                                        }
+                                ],
+                                "sparklineDisplay": "off"
+                        }
+                },
+                "viz_kpi_warnings": {
+                        "type": "splunk.singlevalue",
+                        "title": "TI Manager Warnings",
+                        "dataSources": {
+                                "primary": "ds_kpi_warnings"
+                        },
+                        "options": {
+                                "majorColor": "> majorValue | rangeValue(majorColorEditorConfig)",
+                                "majorColorEditorConfig": [
+                                        {
+                                                "to": 1,
+                                                "value": "#53a051"
+                                        },
+                                        {
+                                                "from": 1,
+                                                "value": "#f8be34"
+                                        }
+                                ],
+                                "sparklineDisplay": "off"
+                        }
+                },
+                "viz_chart_audit": {
+                        "type": "splunk.column",
+                        "title": "Firewall List Changes Over Time (Added vs Removed)",
+                        "dataSources": {
+                                "primary": "ds_chart_audit_activity"
+                        },
+                        "options": {
+                                "stackMode": "stacked",
+                                "legendDisplay": "bottom"
+                        }
+                },
+                "viz_chart_sync": {
+                        "type": "splunk.line",
+                        "title": "Merge Sync Cycle Duration by Target (Seconds)",
+                        "dataSources": {
+                                "primary": "ds_chart_sync_duration"
+                        },
+                        "options": {
+                                "legendDisplay": "bottom",
+                                "nullValueDisplay": "connect"
+                        }
+                },
+                "viz_table_feeds": {
+                        "type": "splunk.table",
+                        "title": "External Threat Intelligence Feeds Health Status (get_ti)",
+                        "dataSources": {
+                                "primary": "ds_table_feeds_status"
+                        },
+                        "options": {
+                                "count": 20,
+                                "showRowNumbers": false,
+                                "columnFormat": {
+                                        "Status": {
+                                                "data": "> table | seriesByName(\"Status\") | formatByType(StatusColumnFormatEditorConfig)",
+                                                "align": "auto",
+                                                "headerAlign": "auto",
+                                                "textOverflow": "break-word",
+                                                "rowColors": "> table | seriesByName(\"Status\") | matchValue(StatusRowColorsEditorConfig)"
+                                        },
+                                        "Unique CIDRs": {
+                                                "data": "> table | seriesByName(\"Unique CIDRs\") | formatByType(Unique_CIDRsColumnFormatEditorConfig)",
+                                                "align": "auto",
+                                                "headerAlign": "auto",
+                                                "textOverflow": "break-word",
+                                                "rowColors": "> table | seriesByName(\"Unique CIDRs\") | rangeValue(Unique_CIDRsRowColorsEditorConfig)"
+                                        },
+                                        "Invalid IPs": {
+                                                "data": "> table | seriesByName(\"Invalid IPs\") | formatByType(Invalid_IPsColumnFormatEditorConfig)",
+                                                "align": "auto",
+                                                "headerAlign": "auto",
+                                                "textOverflow": "break-word",
+                                                "rowColors": "> table | seriesByName(\"Invalid IPs\") | rangeValue(Invalid_IPsRowColorsEditorConfig)"
+                                        }
+                                }
+                        },
+                        "context": {
+                                "StatusColumnFormatEditorConfig": {
+                                        "string": {
+                                                "unitPosition": "after"
+                                        }
+                                },
+                                "StatusRowColorsEditorConfig": [
+                                        {
+                                                "match": "OK (Updated)",
+                                                "value": "#118832"
+                                        },
+                                        {
+                                                "match": "OK (304 Cached)",
+                                                "value": "#CBA700"
+                                        },
+                                        {
+                                                "match": "ERROR",
+                                                "value": "#d41f1f"
+                                        }
+                                ],
+                                "Unique_CIDRsColumnFormatEditorConfig": {
+                                        "number": {
+                                                "thousandSeparated": false,
+                                                "unitPosition": "after"
+                                        }
+                                },
+                                "Unique_CIDRsRowColorsEditorConfig": [
+                                        {
+                                                "value": "#118832",
+                                                "to": 10000
+                                        },
+                                        {
+                                                "value": "#669922",
+                                                "from": 10000,
+                                                "to": 100000
+                                        },
+                                        {
+                                                "value": "#CBA700",
+                                                "from": 100000,
+                                                "to": 1000000
+                                        },
+                                        {
+                                                "value": "#D94E17",
+                                                "from": 1000000,
+                                                "to": 2000000
+                                        },
+                                        {
+                                                "value": "#D41F1F",
+                                                "from": 2000000
+                                        }
+                                ],
+                                "Invalid_IPsColumnFormatEditorConfig": {
+                                        "number": {
+                                                "thousandSeparated": false,
+                                                "unitPosition": "after"
+                                        }
+                                },
+                                "Invalid_IPsRowColorsEditorConfig": [
+                                        {
+                                                "value": "#118832",
+                                                "to": 1
+                                        },
+                                        {
+                                                "value": "#D41F1F",
+                                                "from": 1
+                                        }
+                                ]
+                        }
+                },
+                "viz_table_errors": {
+                        "type": "splunk.table",
+                        "title": "Recent Add-on Errors & Warnings",
+                        "dataSources": {
+                                "primary": "ds_table_recent_errors"
+                        },
+                        "options": {
+                                "count": 15,
+                                "showRowNumbers": false
+                        }
+                },
+                "viz_deny_kpi_enforced": {
+                        "type": "splunk.singlevalue",
+                        "title": "Matching Enforced Subnets (F5 / Palo Alto)",
+                        "dataSources": {
+                                "primary": "ds_deny_enforced_kpi"
+                        },
+                        "options": {
+                                "majorColor": "#dc4e41",
+                                "sparklineDisplay": "off"
+                        }
+                },
+                "viz_deny_kpi_manual": {
+                        "type": "splunk.singlevalue",
+                        "title": "Matching Manual Denylist Entries",
+                        "dataSources": {
+                                "primary": "ds_deny_manual_kpi"
+                        },
+                        "options": {
+                                "majorColor": "#f1813f",
+                                "sparklineDisplay": "off"
+                        }
+                },
+                "viz_deny_table_enforced": {
+                        "type": "splunk.table",
+                        "title": "Active Enforced Firewall Denylists (denylist_f5 & denylist_paloalto — max 1,000 rows)",
+                        "dataSources": {
+                                "primary": "ds_deny_enforced_table"
+                        },
+                        "options": {
+                                "count": 20,
+                                "showRowNumbers": false
+                        }
+                },
+                "viz_deny_table_manual": {
+                        "type": "splunk.table",
+                        "title": "Manual Denylist Metadata & Audit Details (manual_denylist — max 1,000 rows)",
+                        "dataSources": {
+                                "primary": "ds_deny_manual_table"
+                        },
+                        "options": {
+                                "count": 20,
+                                "showRowNumbers": false
+                        }
+                },
+                "viz_allow_kpi_enforced": {
+                        "type": "splunk.singlevalue",
+                        "title": "Matching Enforced Allowlist Subnets",
+                        "dataSources": {
+                                "primary": "ds_allow_enforced_kpi"
+                        },
+                        "options": {
+                                "majorColor": "#53a051",
+                                "sparklineDisplay": "off"
+                        }
+                },
+                "viz_allow_kpi_manual": {
+                        "type": "splunk.singlevalue",
+                        "title": "Matching Manual Allowlist Entries",
+                        "dataSources": {
+                                "primary": "ds_allow_manual_kpi"
+                        },
+                        "options": {
+                                "majorColor": "#006d9c",
+                                "sparklineDisplay": "off"
+                        }
+                },
+                "viz_allow_table_enforced": {
+                        "type": "splunk.table",
+                        "title": "Active Enforced Allowlist (allowlist — Feeds, Manual & Private Networks — max 1,000 rows)",
+                        "dataSources": {
+                                "primary": "ds_allow_enforced_table"
+                        },
+                        "options": {
+                                "count": 20,
+                                "showRowNumbers": false
+                        }
+                },
+                "viz_allow_table_manual": {
+                        "type": "splunk.table",
+                        "title": "Manual Allowlist Metadata & Exceptions (manual_allowlist — max 1,000 rows)",
+                        "dataSources": {
+                                "primary": "ds_allow_manual_table"
+                        },
+                        "options": {
+                                "count": 20,
+                                "showRowNumbers": false
+                        }
                 }
         },
         "layout": {
                 "options": {},
                 "globalInputs": [
-                        "input_global_trp"
+                        "input_time_range"
                 ],
                 "tabs": {
                         "items": [
                                 {
-                                        "layoutId": "layout_1",
-                                        "label": "Overview"
+                                        "layoutId": "tab_overview",
+                                        "label": "Overview & System Health"
+                                },
+                                {
+                                        "layoutId": "tab_denylist",
+                                        "label": "Denylist IP Search"
+                                },
+                                {
+                                        "layoutId": "tab_allowlist",
+                                        "label": "Allowlist IP Search"
                                 }
                         ]
                 },
                 "layoutDefinitions": {
-                        "layout_1": {
-                                "type": "absolute",
+                        "tab_overview": {
+                                "type": "grid",
+                                "options": {
+                                        "width": 1440,
+                                        "height": 1120
+                                },
                                 "structure": [
                                         {
-                                                "item": "viz_7HDqfu78",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 260,
-                                                        "y": 60,
-                                                        "w": 250,
-                                                        "h": 110
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_L6kvQ8OT",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 510,
-                                                        "y": 60,
-                                                        "w": 250,
-                                                        "h": 110
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_ZaigbFem",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 260,
-                                                        "y": 170,
-                                                        "w": 1170,
-                                                        "h": 110
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_M6wzLmIX",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 10,
-                                                        "y": 10,
-                                                        "w": 140,
-                                                        "h": 30
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_w6XHwsKA",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 10,
-                                                        "y": 60,
-                                                        "w": 250,
-                                                        "h": 110
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_PkzgRbAj",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 760,
-                                                        "y": 60,
-                                                        "w": 250,
-                                                        "h": 110
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_Jz3OKMUF",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 1010,
-                                                        "y": 60,
-                                                        "w": 420,
-                                                        "h": 110
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_SNXo3tas",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 1020,
-                                                        "y": 70,
-                                                        "w": 140,
-                                                        "h": 20
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_1IpbfeRR",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 60,
-                                                        "y": 320,
-                                                        "w": 180,
-                                                        "h": 30
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_qnNuUW7k",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 70,
-                                                        "y": 390,
-                                                        "w": 150,
-                                                        "h": 30
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_wbL05Iay",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 20,
-                                                        "y": 380,
-                                                        "w": 40,
-                                                        "h": 40
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_HnWZ0nIK",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 70,
-                                                        "y": 450,
-                                                        "w": 150,
-                                                        "h": 30
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_6bYZdKLW",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 20,
-                                                        "y": 440,
-                                                        "w": 40,
-                                                        "h": 40
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_sGtkIu4J",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 70,
-                                                        "y": 510,
-                                                        "w": 150,
-                                                        "h": 30
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_0vXsuvMi",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 20,
-                                                        "y": 500,
-                                                        "w": 40,
-                                                        "h": 40
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_ruq7fppE",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 70,
-                                                        "y": 570,
-                                                        "w": 180,
-                                                        "h": 30
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_GdV8UXdm",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 20,
-                                                        "y": 560,
-                                                        "w": 40,
-                                                        "h": 40
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_ugziVR6R",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 70,
-                                                        "y": 630,
-                                                        "w": 130,
-                                                        "h": 30
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_N1OLd3BR",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 20,
-                                                        "y": 620,
-                                                        "w": 40,
-                                                        "h": 40
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_rlimanPs",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 70,
-                                                        "y": 690,
-                                                        "w": 150,
-                                                        "h": 30
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_DKsCb7GH",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 20,
-                                                        "y": 680,
-                                                        "w": 40,
-                                                        "h": 40
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_FQEgoUpw",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 70,
-                                                        "y": 750,
-                                                        "w": 170,
-                                                        "h": 30
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_QrsXkvKV",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 20,
-                                                        "y": 740,
-                                                        "w": 40,
-                                                        "h": 40
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_M12SIfMI",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 70,
-                                                        "y": 810,
-                                                        "w": 180,
-                                                        "h": 30
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_MtCYETi6",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 20,
-                                                        "y": 800,
-                                                        "w": 40,
-                                                        "h": 40
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_UcUbJSU6",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 70,
-                                                        "y": 870,
-                                                        "w": 130,
-                                                        "h": 30
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_hFs3pqW3",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 20,
-                                                        "y": 860,
-                                                        "w": 40,
-                                                        "h": 40
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_g1LTYjWp",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 320,
-                                                        "y": 320,
-                                                        "w": 150,
-                                                        "h": 30
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_zNqFDlIg",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 550,
-                                                        "y": 320,
-                                                        "w": 180,
-                                                        "h": 30
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_io4KbyfX",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 510,
-                                                        "y": 370,
-                                                        "w": 230,
-                                                        "h": 60
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_9xArECiN",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 510,
-                                                        "y": 430,
-                                                        "w": 230,
-                                                        "h": 60
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_8BbkRZ6p",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 510,
-                                                        "y": 490,
-                                                        "w": 230,
-                                                        "h": 60
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_v9pWTOni",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 510,
-                                                        "y": 550,
-                                                        "w": 230,
-                                                        "h": 60
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_Okrz3Fqc",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 510,
-                                                        "y": 610,
-                                                        "w": 230,
-                                                        "h": 60
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_ZSZmiYU7",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 510,
-                                                        "y": 670,
-                                                        "w": 230,
-                                                        "h": 60
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_uVDOwDBs",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 510,
-                                                        "y": 730,
-                                                        "w": 230,
-                                                        "h": 60
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_zGvRIjSX",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 510,
-                                                        "y": 790,
-                                                        "w": 230,
-                                                        "h": 60
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_39w1JzGf",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 510,
-                                                        "y": 850,
-                                                        "w": 230,
-                                                        "h": 60
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_utIf2YNt",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 260,
-                                                        "y": 370,
-                                                        "w": 230,
-                                                        "h": 60
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_CLtN3QpC",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 260,
-                                                        "y": 430,
-                                                        "w": 230,
-                                                        "h": 60
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_DaA7yzTd",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 260,
-                                                        "y": 490,
-                                                        "w": 230,
-                                                        "h": 60
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_gQ3CQFsq",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 260,
-                                                        "y": 550,
-                                                        "w": 230,
-                                                        "h": 60
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_yiKrEV8N",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 260,
-                                                        "y": 610,
-                                                        "w": 230,
-                                                        "h": 60
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_ZcRgEdgr",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 260,
-                                                        "y": 670,
-                                                        "w": 230,
-                                                        "h": 60
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_xNzwQ4ro",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 260,
-                                                        "y": 730,
-                                                        "w": 230,
-                                                        "h": 60
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_xbghAnXB",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 260,
-                                                        "y": 790,
-                                                        "w": 230,
-                                                        "h": 60
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_o7QmizXP",
-                                                "type": "block",
-                                                "position": {
-                                                        "x": 260,
-                                                        "y": 850,
-                                                        "w": 230,
-                                                        "h": 60
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_vrSQmPK9",
-                                                "type": "line",
-                                                "position": {
-                                                        "from": {
-                                                                "x": 253,
-                                                                "y": 341
-                                                        },
-                                                        "to": {
-                                                                "x": 252,
-                                                                "y": 899
-                                                        }
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_rTXu1M0a",
-                                                "type": "line",
-                                                "position": {
-                                                        "from": {
-                                                                "x": 500,
-                                                                "y": 342
-                                                        },
-                                                        "to": {
-                                                                "x": 499,
-                                                                "y": 900
-                                                        }
-                                                }
-                                        },
-                                        {
-                                                "item": "viz_A9WLPA4o",
+                                                "item": "viz_kpi_f5",
                                                 "type": "block",
                                                 "position": {
                                                         "x": 0,
-                                                        "y": 210,
-                                                        "w": 130,
-                                                        "h": 40
+                                                        "y": 0,
+                                                        "w": 240,
+                                                        "h": 130
                                                 }
                                         },
                                         {
-                                                "item": "viz_mVoYC9zK",
+                                                "item": "viz_kpi_pa",
                                                 "type": "block",
                                                 "position": {
-                                                        "x": 140,
-                                                        "y": 210,
-                                                        "w": 120,
-                                                        "h": 40
+                                                        "x": 240,
+                                                        "y": 0,
+                                                        "w": 240,
+                                                        "h": 130
                                                 }
                                         },
                                         {
-                                                "item": "viz_QHR7PYhS",
+                                                "item": "viz_kpi_allow",
                                                 "type": "block",
                                                 "position": {
-                                                        "x": 10,
-                                                        "y": 180,
-                                                        "w": 150,
-                                                        "h": 30
+                                                        "x": 480,
+                                                        "y": 0,
+                                                        "w": 240,
+                                                        "h": 130
                                                 }
                                         },
                                         {
-                                                "item": "viz_GvXR2xF5",
+                                                "item": "viz_kpi_manual",
                                                 "type": "block",
                                                 "position": {
-                                                        "x": 130,
-                                                        "y": 180,
-                                                        "w": 150,
-                                                        "h": 30
+                                                        "x": 720,
+                                                        "y": 0,
+                                                        "w": 240,
+                                                        "h": 130
                                                 }
                                         },
                                         {
-                                                "item": "viz_RTEhHfiS",
+                                                "item": "viz_kpi_errors",
                                                 "type": "block",
                                                 "position": {
-                                                        "x": 750,
-                                                        "y": 360,
-                                                        "w": 670,
-                                                        "h": 560
+                                                        "x": 960,
+                                                        "y": 0,
+                                                        "w": 240,
+                                                        "h": 130
                                                 }
                                         },
                                         {
-                                                "item": "viz_aWXkUxjw",
+                                                "item": "viz_kpi_warnings",
                                                 "type": "block",
                                                 "position": {
-                                                        "x": 750,
-                                                        "y": 320,
-                                                        "w": 390,
-                                                        "h": 30
+                                                        "x": 1200,
+                                                        "y": 0,
+                                                        "w": 240,
+                                                        "h": 130
+                                                }
+                                        },
+                                        {
+                                                "item": "viz_chart_audit",
+                                                "type": "block",
+                                                "position": {
+                                                        "x": 0,
+                                                        "y": 130,
+                                                        "w": 720,
+                                                        "h": 310
+                                                }
+                                        },
+                                        {
+                                                "item": "viz_chart_sync",
+                                                "type": "block",
+                                                "position": {
+                                                        "x": 720,
+                                                        "y": 130,
+                                                        "w": 720,
+                                                        "h": 310
+                                                }
+                                        },
+                                        {
+                                                "item": "viz_table_feeds",
+                                                "type": "block",
+                                                "position": {
+                                                        "x": 0,
+                                                        "y": 440,
+                                                        "w": 1440,
+                                                        "h": 340
+                                                }
+                                        },
+                                        {
+                                                "item": "viz_table_errors",
+                                                "type": "block",
+                                                "position": {
+                                                        "x": 0,
+                                                        "y": 780,
+                                                        "w": 1440,
+                                                        "h": 340
                                                 }
                                         }
-                                ],
+                                ]
+                        },
+                        "tab_denylist": {
+                                "type": "grid",
                                 "options": {
                                         "width": 1440,
-                                        "height": 960,
-                                        "display": "auto"
-                                }
+                                        "height": 1080
+                                },
+                                "structure": [
+                                        {
+                                                "item": "input_deny_ip_search",
+                                                "type": "input",
+                                                "position": {
+                                                        "x": 0,
+                                                        "y": 0,
+                                                        "w": 720,
+                                                        "h": 90
+                                                }
+                                        },
+                                        {
+                                                "item": "input_deny_target_filter",
+                                                "type": "input",
+                                                "position": {
+                                                        "x": 720,
+                                                        "y": 0,
+                                                        "w": 720,
+                                                        "h": 90
+                                                }
+                                        },
+                                        {
+                                                "item": "viz_deny_kpi_enforced",
+                                                "type": "block",
+                                                "position": {
+                                                        "x": 0,
+                                                        "y": 90,
+                                                        "w": 720,
+                                                        "h": 130
+                                                }
+                                        },
+                                        {
+                                                "item": "viz_deny_kpi_manual",
+                                                "type": "block",
+                                                "position": {
+                                                        "x": 720,
+                                                        "y": 90,
+                                                        "w": 720,
+                                                        "h": 130
+                                                }
+                                        },
+                                        {
+                                                "item": "viz_deny_table_enforced",
+                                                "type": "block",
+                                                "position": {
+                                                        "x": 0,
+                                                        "y": 220,
+                                                        "w": 1440,
+                                                        "h": 430
+                                                }
+                                        },
+                                        {
+                                                "item": "viz_deny_table_manual",
+                                                "type": "block",
+                                                "position": {
+                                                        "x": 0,
+                                                        "y": 650,
+                                                        "w": 1440,
+                                                        "h": 430
+                                                }
+                                        }
+                                ]
+                        },
+                        "tab_allowlist": {
+                                "type": "grid",
+                                "options": {
+                                        "width": 1440,
+                                        "height": 1080
+                                },
+                                "structure": [
+                                        {
+                                                "item": "input_allow_ip_search",
+                                                "type": "input",
+                                                "position": {
+                                                        "x": 0,
+                                                        "y": 0,
+                                                        "w": 720,
+                                                        "h": 90
+                                                }
+                                        },
+                                        {
+                                                "item": "viz_allow_kpi_enforced",
+                                                "type": "block",
+                                                "position": {
+                                                        "x": 0,
+                                                        "y": 90,
+                                                        "w": 720,
+                                                        "h": 130
+                                                }
+                                        },
+                                        {
+                                                "item": "viz_allow_kpi_manual",
+                                                "type": "block",
+                                                "position": {
+                                                        "x": 720,
+                                                        "y": 90,
+                                                        "w": 720,
+                                                        "h": 130
+                                                }
+                                        },
+                                        {
+                                                "item": "viz_allow_table_enforced",
+                                                "type": "block",
+                                                "position": {
+                                                        "x": 0,
+                                                        "y": 220,
+                                                        "w": 1440,
+                                                        "h": 430
+                                                }
+                                        },
+                                        {
+                                                "item": "viz_allow_table_manual",
+                                                "type": "block",
+                                                "position": {
+                                                        "x": 0,
+                                                        "y": 650,
+                                                        "w": 1440,
+                                                        "h": 430
+                                                }
+                                        }
+                                ]
                         }
                 }
-        },
-        "description": "Dashboard to monitor the health status of the TI manager mechanism.",
-        "title": "TI Manager - Monitor"
+        }
 }
     ]]></definition>
 </dashboard>
