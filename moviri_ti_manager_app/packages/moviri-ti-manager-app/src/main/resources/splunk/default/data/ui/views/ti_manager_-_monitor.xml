@@ -1,10 +1,10 @@
 <dashboard version="2" theme="dark">
     <label>Moviri TI Manager - Overview &amp; IP Lookup</label>
-    <description>Operational health monitoring, external feed status, and high-scale IP/CIDR search across F5 (3M+ subnets), Palo Alto, and Manual KV Store collections.</description>
+    <description>Operational health monitoring, external feed status, and high-scale IP/CIDR search across F5, Palo Alto, and Manual KV Store collections.</description>
     <definition><![CDATA[
 {
         "title": "Moviri TI Manager - Overview & IP Lookup",
-        "description": "Operational health monitoring, external feed status, and high-scale IP/CIDR search across F5 (3M+ subnets), Palo Alto, and Manual KV Store collections.",
+        "description": "Operational health monitoring, external feed status, and high-scale IP/CIDR search across F5, Palo Alto, and Manual KV Store collections.",
         "defaults": {
                 "dataSources": {
                         "ds.search": {
