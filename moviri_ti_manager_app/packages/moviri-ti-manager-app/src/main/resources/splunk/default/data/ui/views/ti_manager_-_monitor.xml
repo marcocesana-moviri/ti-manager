@@ -130,7 +130,11 @@
                         "type": "ds.search",
                         "name": "External Threat Feeds Health",
                         "options": {
-                                "query": "index=_internal (\"[TI MANAGER INFO] [FEED]\" OR \"[TI MANAGER ERROR] [FEED]\") | rex field=_raw \"\\[(?<severity>INFO|ERROR)\\] \\[FEED\\] (?<msg>.*?)\\s+url=(?<url>\\S+)\" | rex field=_raw \"unique_ips=(?<unique_ips>\\d+)\" | rex field=_raw \"regex_fails=(?<regex_fails>\\d+)\\s+invalid_ips=(?<invalid_ips>\\d+)\" | rex field=_raw \"elapsed=(?<elapsed>[\\d\\.]+)s\" | eval status=case(severity==\"ERROR\", \"ERROR\", like(msg, \"%304%\"), \"OK (304 Cached)\", 1==1, \"OK (Updated)\") | stats latest(_time) as last_run, latest(status) as Status, latest(unique_ips) as \"Unique CIDRs\", latest(regex_fails) as \"Regex Skips\", latest(invalid_ips) as \"Invalid IPs\", latest(elapsed) as \"Duration (s)\" by url | eval \"Last Check\"=strftime(last_run, \"%Y-%m-%d %H:%M:%S\") | table \"Last Check\", Status, url, \"Unique CIDRs\", \"Regex Skips\", \"Invalid IPs\", \"Duration (s)\" | sort Status, url"
+                                "query": "index=_internal (\"[TI MANAGER INFO] [FEED]\" OR \"[TI MANAGER ERROR] [FEED]\") | rex field=_raw \"(?<severity>INFO|ERROR)\\] \\[FEED\\] (?<msg>.*?)\\s+url=(?<url>\\S+)\" | rex field=_raw \"unique_ips=(?<unique_ips>\\d+)\" | rex field=_raw \"regex_fails=(?<regex_fails>\\d+)\\s+invalid_ips=(?<invalid_ips>\\d+)\" | rex field=_raw \"elapsed=(?<elapsed>[\\d\\.]+)s\" | eval status=case(severity==\"ERROR\", \"ERROR\", like(msg, \"%304%\"), \"OK (304 Cached)\", 1==1, \"OK (Updated)\") | stats latest(_time) as last_run, latest(status) as Status, latest(unique_ips) as \"Unique CIDRs\", latest(regex_fails) as \"Regex Skips\", latest(invalid_ips) as \"Invalid IPs\", latest(elapsed) as \"Duration (s)\" by url | eval \"Last Check\"=strftime(last_run, \"%Y-%m-%d %H:%M:%S\") | table \"Last Check\", Status, url, \"Unique CIDRs\", \"Regex Skips\", \"Invalid IPs\", \"Duration (s)\" | sort Status, url",
+                                "queryParameters": {
+                                        "earliest": "-7d@h",
+                                        "latest": "now"
+                                }
                         }
                 },
                 "ds_table_recent_errors": {
